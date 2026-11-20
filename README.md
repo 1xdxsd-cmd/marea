@@ -42,6 +42,17 @@ Si PEGO te resulta útil, puedes apoyar su desarrollo en Ko-fi:
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Apoyar%20a%20PEGO-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/jsguaman)
 
+## Licencia y Créditos
+
+Este proyecto está licenciado bajo **GNU General Public License v3.0 (GPL-3.0)**. Consulta el archivo [LICENSE](LICENSE) para más detalles.
+
+Librerías y APIs open-source/abiertas utilizadas:
+- `NewPipeExtractor` (GPL-3.0)
+- `JAudiotagger` (LGPL)
+- `Jetpack Media3`, `Room`, `WorkManager`, `Jetpack Compose` (Apache-2.0)
+- `OkHttp`, `Coil` (Apache-2.0)
+- `LRCLIB`, `MusicBrainz / ListenBrainz Labs`, `iTunes Search API`, `Deezer API`
+
 ## Aviso
 
 PEGO es un cliente reproductor y gestor de audio open-source. No aloja ni distribuye contenido multimedia protegido por derechos de autor. Cada usuario es responsable del uso de la aplicación y del cumplimiento de las normativas y términos de servicio aplicables.
