@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">PEGO</string>
+    <string name="download_channel_name">Descargas de música</string>
+    <string name="download_channel_desc">Progreso de descargas de canciones y playlists</string>
+    <string name="playback_channel_name">Reproducción de música</string>
+    <string name="playback_channel_desc">Controles de reproducción de PEGO</string>
+</resources>
