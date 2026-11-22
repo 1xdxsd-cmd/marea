@@ -16,6 +16,13 @@ android {
         versionCode = 1
         versionName = "0.1.0-mvp"
 
+        // URL HTTPS de tu servidor de acceso (carpeta /server). Define PEGO_ACCESS_URL en
+        // gradle.properties, con -PPEGO_ACCESS_URL=... o como variable de entorno.
+        val accessUrl = (project.findProperty("PEGO_ACCESS_URL") as String?)
+            ?: System.getenv("PEGO_ACCESS_URL")
+            ?: "https://pego.example.com"
+        buildConfigField("String", "ACCESS_SERVER_URL", "\"${accessUrl.trimEnd('/')}\"")
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
