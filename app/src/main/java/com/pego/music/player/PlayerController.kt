@@ -219,6 +219,10 @@ class PlayerController(
         if (controller.isPlaying) controller.pause() else controller.play()
     }
 
+    fun pause() {
+        mediaController?.pause()
+    }
+
     fun seekTo(positionMs: Long) {
         mediaController?.seekTo(positionMs)
         _uiState.update { it.copy(positionMs = positionMs) }
