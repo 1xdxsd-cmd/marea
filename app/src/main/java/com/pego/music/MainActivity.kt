@@ -36,6 +36,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.pego.music.data.access.AccessState
 import com.pego.music.data.extractor.YouTubeUrlParser
 import com.pego.music.domain.model.TrackItem
 import com.pego.music.ui.PegoViewModel
@@ -46,6 +48,7 @@ import com.pego.music.ui.components.EditCoverDialog
 import com.pego.music.ui.components.FullPlayerSheet
 import com.pego.music.ui.components.MiniPlayer
 import com.pego.music.ui.components.TrimAudioDialog
+import com.pego.music.ui.screens.AccessGate
 import com.pego.music.ui.screens.HomeScreen
 import com.pego.music.ui.screens.LibraryScreen
 import com.pego.music.ui.screens.SearchScreen
@@ -54,12 +57,15 @@ import com.pego.music.ui.theme.PegoGreen
 import com.pego.music.ui.theme.PegoSurface
 import com.pego.music.ui.theme.PegoTextSecondary
 import com.pego.music.ui.theme.PegoTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
     private val viewModel: PegoViewModel by viewModels {
         PegoViewModel.factory((application as PegoApp).container)
     }
+
+    private val container get() = (application as PegoApp).container
 
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -69,272 +75,287 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         askNotificationPermissionIfNeeded()
 
+        // Si el acceso se revoca, detener la reproducción.
+        lifecycleScope.launch {
+            container.accessRepository.state.collect { state ->
+                if (state is AccessState.Locked) container.playerController.pause()
+            }
+        }
+
         val initialSharedUrl = extractUrlFromIntent(intent)
 
         setContent {
             PegoTheme {
-                var selectedTab by remember {
-                    mutableIntStateOf(if (initialSharedUrl != null) 1 else 0)
-                }
-                var showFullPlayer by remember { mutableStateOf(false) }
-                var trackForPlaylist by remember { mutableStateOf<TrackItem?>(null) }
-                var trackForTrim by remember { mutableStateOf<TrackItem?>(null) }
-                var trackForCover by remember { mutableStateOf<TrackItem?>(null) }
-                var showCreatePlaylist by remember { mutableStateOf(false) }
-
-                val snackbarHostState = remember { SnackbarHostState() }
-
-                val searchState by viewModel.mergedSearchState.collectAsState()
-                val playbackState by viewModel.playbackState.collectAsState()
-                val downloadedTracks by viewModel.downloadedTracks.collectAsState()
-                val activeDownloads by viewModel.activeDownloads.collectAsState()
-                val localPlaylists by viewModel.localPlaylists.collectAsState()
-                val savedTracksMap by viewModel.allSavedTracksMap.collectAsState()
-                val recommendations by viewModel.recommendations.collectAsState()
-                val isLoadingRecs by viewModel.isLoadingRecommendations.collectAsState()
-                val artistState by viewModel.artistState.collectAsState()
-                val lyrics by viewModel.lyricsState.collectAsState()
-                val isLoadingLyrics by viewModel.isLoadingLyrics.collectAsState()
-                val coverEditorState by viewModel.coverEditorState.collectAsState()
-                val uiMessage by viewModel.uiMessage.collectAsState()
-
-                LaunchedEffect(initialSharedUrl) {
-                    if (initialSharedUrl != null) {
-                        viewModel.submitSearchOrLink(initialSharedUrl)
+                AccessGate(access = container.accessRepository) {
+                    var selectedTab by remember {
+                        mutableIntStateOf(if (initialSharedUrl != null) 1 else 0)
                     }
-                }
+                    var showFullPlayer by remember { mutableStateOf(false) }
+                    var trackForPlaylist by remember { mutableStateOf<TrackItem?>(null) }
+                    var trackForTrim by remember { mutableStateOf<TrackItem?>(null) }
+                    var trackForCover by remember { mutableStateOf<TrackItem?>(null) }
+                    var showCreatePlaylist by remember { mutableStateOf(false) }
 
-                LaunchedEffect(playbackState.errorMessage) {
-                    playbackState.errorMessage?.let { msg ->
-                        snackbarHostState.showSnackbar(msg)
-                        (application as PegoApp).container.playerController.clearError()
-                    }
-                }
+                    val snackbarHostState = remember { SnackbarHostState() }
 
-                LaunchedEffect(uiMessage) {
-                    uiMessage?.let { msg ->
-                        snackbarHostState.showSnackbar(msg)
-                        viewModel.clearUiMessage()
-                    }
-                }
+                    val searchState by viewModel.mergedSearchState.collectAsState()
+                    val playbackState by viewModel.playbackState.collectAsState()
+                    val downloadedTracks by viewModel.downloadedTracks.collectAsState()
+                    val activeDownloads by viewModel.activeDownloads.collectAsState()
+                    val localPlaylists by viewModel.localPlaylists.collectAsState()
+                    val savedTracksMap by viewModel.allSavedTracksMap.collectAsState()
+                    val recommendations by viewModel.recommendations.collectAsState()
+                    val isLoadingRecs by viewModel.isLoadingRecommendations.collectAsState()
+                    val artistState by viewModel.artistState.collectAsState()
+                    val lyrics by viewModel.lyricsState.collectAsState()
+                    val isLoadingLyrics by viewModel.isLoadingLyrics.collectAsState()
+                    val coverEditorState by viewModel.coverEditorState.collectAsState()
+                    val uiMessage by viewModel.uiMessage.collectAsState()
 
-                Scaffold(
-                    containerColor = PegoBlack,
-                    snackbarHost = { SnackbarHost(snackbarHostState) },
-                    bottomBar = {
-                        Column {
-                            MiniPlayer(
-                                playbackState = playbackState,
-                                onTogglePlayPause = viewModel::togglePlayPause,
-                                onExpand = { showFullPlayer = true }
-                            )
-                            NavigationBar(containerColor = PegoSurface) {
-                                val navColors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = PegoGreen,
-                                    selectedTextColor = PegoGreen,
-                                    unselectedIconColor = PegoTextSecondary,
-                                    unselectedTextColor = PegoTextSecondary,
-                                    indicatorColor = Color.Transparent
-                                )
-                                NavigationBarItem(
-                                    selected = selectedTab == 0,
-                                    onClick = { selectedTab = 0 },
-                                    icon = { Icon(Icons.Rounded.Home, contentDescription = "Inicio") },
-                                    label = { Text("Inicio") },
-                                    colors = navColors
-                                )
-                                NavigationBarItem(
-                                    selected = selectedTab == 1,
-                                    onClick = { selectedTab = 1 },
-                                    icon = { Icon(Icons.Rounded.Search, contentDescription = "Buscar") },
-                                    label = { Text("Buscar") },
-                                    colors = navColors
-                                )
-                                NavigationBarItem(
-                                    selected = selectedTab == 2,
-                                    onClick = { selectedTab = 2 },
-                                    icon = { Icon(Icons.Rounded.LibraryMusic, contentDescription = "Biblioteca") },
-                                    label = { Text("Biblioteca") },
-                                    colors = navColors
-                                )
-                            }
+                    LaunchedEffect(initialSharedUrl) {
+                        if (initialSharedUrl != null) {
+                            viewModel.submitSearchOrLink(initialSharedUrl)
                         }
                     }
-                ) { innerPadding ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-                    ) {
-                        when (selectedTab) {
-                            0 -> HomeScreen(
-                                playlists = localPlaylists,
-                                recommendations = recommendations,
-                                isLoadingRecommendations = isLoadingRecs,
-                                currentTrackId = playbackState.currentTrack?.id,
-                                onSearchSubmit = { query ->
-                                    selectedTab = 1
-                                    viewModel.submitSearchOrLink(query)
-                                },
-                                onRefreshRecommendations = viewModel::refreshRecommendations,
-                                onPlayTrack = viewModel::playTrack,
-                                onDownloadTrack = viewModel::downloadSingleTrack,
-                                onAddToPlaylist = { trackForPlaylist = it },
-                                onArtistClick = viewModel::openArtistPage
-                            )
 
-                            1 -> SearchScreen(
-                                state = searchState,
-                                currentTrackId = playbackState.currentTrack?.id,
-                                onQueryChange = viewModel::updateQuery,
-                                onOriginalsFilterChange = viewModel::setOriginalsOnly,
-                                onSubmitSearch = viewModel::submitSearchOrLink,
-                                onPlayTrack = viewModel::playTrack,
-                                onDownloadSingle = viewModel::downloadSingleTrack,
-                                onArtistClick = viewModel::openArtistPage,
-                                onAddToPlaylist = { trackForPlaylist = it },
-                                onEditCover = {
-                                    viewModel.resetCoverEditor()
-                                    trackForCover = it
-                                },
-                                onTrimTrack = { trackForTrim = it },
-                                onDeleteTrack = { viewModel.deleteDownloadedTrack(it.id) },
-                                onTogglePlaylistSelection = viewModel::togglePlaylistSelection,
-                                onSelectAllPlaylist = viewModel::selectAllPlaylistTracks,
-                                onDownloadSelectedPlaylist = viewModel::downloadSelectedPlaylist,
-                                onClearPlaylist = viewModel::clearPlaylistPreview
-                            )
-
-                            2 -> LibraryScreen(
-                                downloadedTracks = downloadedTracks,
-                                activeDownloads = activeDownloads,
-                                playlists = localPlaylists,
-                                currentTrackId = playbackState.currentTrack?.id,
-                                onPlayTrack = viewModel::playTrack,
-                                onPlayShuffled = { tracks ->
-                                    if (tracks.isNotEmpty()) {
-                                        if (!playbackState.shuffleEnabled) {
-                                            viewModel.toggleShuffle()
-                                        }
-                                        viewModel.playTrack(tracks.random(), tracks)
-                                    }
-                                },
-                                onRetryDownload = viewModel::downloadSingleTrack,
-                                onCancelQueueTrack = { viewModel.cancelOrRemoveQueuedDownload(it.id) },
-                                onArtistClick = viewModel::openArtistPage,
-                                onAddToPlaylist = { trackForPlaylist = it },
-                                onEditCover = {
-                                    viewModel.resetCoverEditor()
-                                    trackForCover = it
-                                },
-                                onTrimTrack = { trackForTrim = it },
-                                onDeleteTrack = { viewModel.deleteDownloadedTrack(it.id) },
-                                onRemoveTrackFromPlaylist = viewModel::removeTrackFromPlaylist,
-                                onDeletePlaylist = viewModel::deletePlaylist,
-                                onCreateNewPlaylist = { showCreatePlaylist = true }
-                            )
+                    LaunchedEffect(playbackState.errorMessage) {
+                        playbackState.errorMessage?.let { msg ->
+                            snackbarHostState.showSnackbar(msg)
+                            (application as PegoApp).container.playerController.clearError()
                         }
                     }
-                }
 
-                if (showFullPlayer && playbackState.currentTrack != null) {
-                    val synced = playbackState.currentTrack?.let { savedTracksMap[it.id] ?: it }
-                    FullPlayerSheet(
-                        playbackState = playbackState,
-                        syncedTrack = synced,
-                        lyrics = lyrics,
-                        isLoadingLyrics = isLoadingLyrics,
-                        onDismiss = { showFullPlayer = false },
-                        onTogglePlayPause = viewModel::togglePlayPause,
-                        onNext = viewModel::playNext,
-                        onPrevious = viewModel::playPrevious,
-                        onSeekTo = viewModel::seekTo,
-                        onToggleShuffle = viewModel::toggleShuffle,
-                        onCycleRepeatMode = viewModel::cycleRepeatMode,
-                        onDownloadClick = viewModel::downloadSingleTrack,
-                        onAddToPlaylist = { trackForPlaylist = it },
-                        onEditCover = {
-                            viewModel.resetCoverEditor()
-                            trackForCover = it
-                        },
-                        onTrimTrack = { trackForTrim = it },
-                        onArtistClick = { artist ->
-                            showFullPlayer = false
-                            viewModel.openArtistPage(artist)
+                    LaunchedEffect(uiMessage) {
+                        uiMessage?.let { msg ->
+                            snackbarHostState.showSnackbar(msg)
+                            viewModel.clearUiMessage()
                         }
-                    )
-                }
+                    }
 
-                artistState?.let { currentArtist ->
-                    ArtistSheet(
-                        state = currentArtist,
-                        currentTrackId = playbackState.currentTrack?.id,
-                        onDismiss = viewModel::closeArtistPage,
-                        onPlayTrack = viewModel::playTrack,
-                        onPlayShuffled = { tracks ->
-                            if (tracks.isNotEmpty()) {
-                                if (!playbackState.shuffleEnabled) {
-                                    viewModel.toggleShuffle()
+                    Scaffold(
+                        containerColor = PegoBlack,
+                        snackbarHost = { SnackbarHost(snackbarHostState) },
+                        bottomBar = {
+                            Column {
+                                MiniPlayer(
+                                    playbackState = playbackState,
+                                    onTogglePlayPause = viewModel::togglePlayPause,
+                                    onExpand = { showFullPlayer = true }
+                                )
+                                NavigationBar(containerColor = PegoSurface) {
+                                    val navColors = NavigationBarItemDefaults.colors(
+                                        selectedIconColor = PegoGreen,
+                                        selectedTextColor = PegoGreen,
+                                        unselectedIconColor = PegoTextSecondary,
+                                        unselectedTextColor = PegoTextSecondary,
+                                        indicatorColor = Color.Transparent
+                                    )
+                                    NavigationBarItem(
+                                        selected = selectedTab == 0,
+                                        onClick = { selectedTab = 0 },
+                                        icon = { Icon(Icons.Rounded.Home, contentDescription = "Inicio") },
+                                        label = { Text("Inicio") },
+                                        colors = navColors
+                                    )
+                                    NavigationBarItem(
+                                        selected = selectedTab == 1,
+                                        onClick = { selectedTab = 1 },
+                                        icon = { Icon(Icons.Rounded.Search, contentDescription = "Buscar") },
+                                        label = { Text("Buscar") },
+                                        colors = navColors
+                                    )
+                                    NavigationBarItem(
+                                        selected = selectedTab == 2,
+                                        onClick = { selectedTab = 2 },
+                                        icon = { Icon(Icons.Rounded.LibraryMusic, contentDescription = "Biblioteca") },
+                                        label = { Text("Biblioteca") },
+                                        colors = navColors
+                                    )
                                 }
-                                viewModel.playTrack(tracks.random(), tracks)
                             }
-                        },
-                        onDownloadTrack = viewModel::downloadSingleTrack,
-                        onAddToPlaylist = { trackForPlaylist = it },
-                        onEditCover = {
-                            viewModel.resetCoverEditor()
-                            trackForCover = it
-                        },
-                        onTrimTrack = { trackForTrim = it },
-                        onDeleteTrack = { viewModel.deleteDownloadedTrack(it.id) }
-                    )
-                }
-
-                trackForPlaylist?.let { target ->
-                    AddToPlaylistDialog(
-                        track = target,
-                        playlists = localPlaylists,
-                        onDismiss = { trackForPlaylist = null },
-                        onSelectPlaylist = { plId -> viewModel.addTrackToPlaylist(plId, target) },
-                        onCreatePlaylistWithTrack = { name -> viewModel.createPlaylist(name, target) }
-                    )
-                }
-
-                if (showCreatePlaylist) {
-                    CreatePlaylistDialog(
-                        onDismiss = { showCreatePlaylist = false },
-                        onCreate = { name -> viewModel.createPlaylist(name, null) }
-                    )
-                }
-
-                trackForTrim?.let { target ->
-                    val syncedTarget = savedTracksMap[target.id] ?: target
-                    TrimAudioDialog(
-                        track = syncedTarget,
-                        onDismiss = { trackForTrim = null },
-                        onConfirmTrim = { startMs, endMs, onDone ->
-                            viewModel.trimDownloadedTrack(syncedTarget, startMs, endMs, onDone)
                         }
-                    )
-                }
+                    ) { innerPadding ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                        ) {
+                            when (selectedTab) {
+                                0 -> HomeScreen(
+                                    playlists = localPlaylists,
+                                    recommendations = recommendations,
+                                    isLoadingRecommendations = isLoadingRecs,
+                                    currentTrackId = playbackState.currentTrack?.id,
+                                    onSearchSubmit = { query ->
+                                        selectedTab = 1
+                                        viewModel.submitSearchOrLink(query)
+                                    },
+                                    onRefreshRecommendations = viewModel::refreshRecommendations,
+                                    onPlayTrack = viewModel::playTrack,
+                                    onDownloadTrack = viewModel::downloadSingleTrack,
+                                    onAddToPlaylist = { trackForPlaylist = it },
+                                    onArtistClick = viewModel::openArtistPage
+                                )
 
-                trackForCover?.let { target ->
-                    val syncedTarget = savedTracksMap[target.id] ?: target
-                    EditCoverDialog(
-                        track = syncedTarget,
-                        state = coverEditorState,
-                        onDismiss = { trackForCover = null },
-                        onSearchInternet = { q -> viewModel.searchCoversFromInternet(q) },
-                        onApplyUrl = { url -> viewModel.applyCoverFromUrl(syncedTarget, url) },
-                        onApplyGalleryUri = { uri -> viewModel.applyCoverFromGalleryUri(syncedTarget, uri) }
-                    )
+                                1 -> SearchScreen(
+                                    state = searchState,
+                                    currentTrackId = playbackState.currentTrack?.id,
+                                    onQueryChange = viewModel::updateQuery,
+                                    onOriginalsFilterChange = viewModel::setOriginalsOnly,
+                                    onSubmitSearch = viewModel::submitSearchOrLink,
+                                    onPlayTrack = viewModel::playTrack,
+                                    onDownloadSingle = viewModel::downloadSingleTrack,
+                                    onArtistClick = viewModel::openArtistPage,
+                                    onAddToPlaylist = { trackForPlaylist = it },
+                                    onEditCover = {
+                                        viewModel.resetCoverEditor()
+                                        trackForCover = it
+                                    },
+                                    onTrimTrack = { trackForTrim = it },
+                                    onDeleteTrack = { viewModel.deleteDownloadedTrack(it.id) },
+                                    onTogglePlaylistSelection = viewModel::togglePlaylistSelection,
+                                    onSelectAllPlaylist = viewModel::selectAllPlaylistTracks,
+                                    onDownloadSelectedPlaylist = viewModel::downloadSelectedPlaylist,
+                                    onClearPlaylist = viewModel::clearPlaylistPreview
+                                )
+
+                                2 -> LibraryScreen(
+                                    downloadedTracks = downloadedTracks,
+                                    activeDownloads = activeDownloads,
+                                    playlists = localPlaylists,
+                                    currentTrackId = playbackState.currentTrack?.id,
+                                    onPlayTrack = viewModel::playTrack,
+                                    onPlayShuffled = { tracks ->
+                                        if (tracks.isNotEmpty()) {
+                                            if (!playbackState.shuffleEnabled) {
+                                                viewModel.toggleShuffle()
+                                            }
+                                            viewModel.playTrack(tracks.random(), tracks)
+                                        }
+                                    },
+                                    onRetryDownload = viewModel::downloadSingleTrack,
+                                    onCancelQueueTrack = { viewModel.cancelOrRemoveQueuedDownload(it.id) },
+                                    onArtistClick = viewModel::openArtistPage,
+                                    onAddToPlaylist = { trackForPlaylist = it },
+                                    onEditCover = {
+                                        viewModel.resetCoverEditor()
+                                        trackForCover = it
+                                    },
+                                    onTrimTrack = { trackForTrim = it },
+                                    onDeleteTrack = { viewModel.deleteDownloadedTrack(it.id) },
+                                    onRemoveTrackFromPlaylist = viewModel::removeTrackFromPlaylist,
+                                    onDeletePlaylist = viewModel::deletePlaylist,
+                                    onCreateNewPlaylist = { showCreatePlaylist = true }
+                                )
+                            }
+                        }
+                    }
+
+                    if (showFullPlayer && playbackState.currentTrack != null) {
+                        val synced = playbackState.currentTrack?.let { savedTracksMap[it.id] ?: it }
+                        FullPlayerSheet(
+                            playbackState = playbackState,
+                            syncedTrack = synced,
+                            lyrics = lyrics,
+                            isLoadingLyrics = isLoadingLyrics,
+                            onDismiss = { showFullPlayer = false },
+                            onTogglePlayPause = viewModel::togglePlayPause,
+                            onNext = viewModel::playNext,
+                            onPrevious = viewModel::playPrevious,
+                            onSeekTo = viewModel::seekTo,
+                            onToggleShuffle = viewModel::toggleShuffle,
+                            onCycleRepeatMode = viewModel::cycleRepeatMode,
+                            onDownloadClick = viewModel::downloadSingleTrack,
+                            onAddToPlaylist = { trackForPlaylist = it },
+                            onEditCover = {
+                                viewModel.resetCoverEditor()
+                                trackForCover = it
+                            },
+                            onTrimTrack = { trackForTrim = it },
+                            onArtistClick = { artist ->
+                                showFullPlayer = false
+                                viewModel.openArtistPage(artist)
+                            }
+                        )
+                    }
+
+                    artistState?.let { currentArtist ->
+                        ArtistSheet(
+                            state = currentArtist,
+                            currentTrackId = playbackState.currentTrack?.id,
+                            onDismiss = viewModel::closeArtistPage,
+                            onPlayTrack = viewModel::playTrack,
+                            onPlayShuffled = { tracks ->
+                                if (tracks.isNotEmpty()) {
+                                    if (!playbackState.shuffleEnabled) {
+                                        viewModel.toggleShuffle()
+                                    }
+                                    viewModel.playTrack(tracks.random(), tracks)
+                                }
+                            },
+                            onDownloadTrack = viewModel::downloadSingleTrack,
+                            onAddToPlaylist = { trackForPlaylist = it },
+                            onEditCover = {
+                                viewModel.resetCoverEditor()
+                                trackForCover = it
+                            },
+                            onTrimTrack = { trackForTrim = it },
+                            onDeleteTrack = { viewModel.deleteDownloadedTrack(it.id) }
+                        )
+                    }
+
+                    trackForPlaylist?.let { target ->
+                        AddToPlaylistDialog(
+                            track = target,
+                            playlists = localPlaylists,
+                            onDismiss = { trackForPlaylist = null },
+                            onSelectPlaylist = { plId -> viewModel.addTrackToPlaylist(plId, target) },
+                            onCreatePlaylistWithTrack = { name -> viewModel.createPlaylist(name, target) }
+                        )
+                    }
+
+                    if (showCreatePlaylist) {
+                        CreatePlaylistDialog(
+                            onDismiss = { showCreatePlaylist = false },
+                            onCreate = { name -> viewModel.createPlaylist(name, null) }
+                        )
+                    }
+
+                    trackForTrim?.let { target ->
+                        val syncedTarget = savedTracksMap[target.id] ?: target
+                        TrimAudioDialog(
+                            track = syncedTarget,
+                            onDismiss = { trackForTrim = null },
+                            onConfirmTrim = { startMs, endMs, onDone ->
+                                viewModel.trimDownloadedTrack(syncedTarget, startMs, endMs, onDone)
+                            }
+                        )
+                    }
+
+                    trackForCover?.let { target ->
+                        val syncedTarget = savedTracksMap[target.id] ?: target
+                        EditCoverDialog(
+                            track = syncedTarget,
+                            state = coverEditorState,
+                            onDismiss = { trackForCover = null },
+                            onSearchInternet = { q -> viewModel.searchCoversFromInternet(q) },
+                            onApplyUrl = { url -> viewModel.applyCoverFromUrl(syncedTarget, url) },
+                            onApplyGalleryUri = { uri -> viewModel.applyCoverFromGalleryUri(syncedTarget, uri) }
+                        )
+                    }
                 }
             }
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        lifecycleScope.launch { container.accessRepository.verify() }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (container.accessRepository.state.value !is AccessState.Granted) return
         extractUrlFromIntent(intent)?.let { url ->
             viewModel.submitSearchOrLink(url)
         }

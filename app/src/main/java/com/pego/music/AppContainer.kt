@@ -2,6 +2,7 @@ package com.pego.music
 
 import android.content.Context
 import com.pego.music.core.network.OkHttpDownloader
+import com.pego.music.data.access.AccessRepository
 import com.pego.music.data.audio.AudioTrimmer
 import com.pego.music.data.download.DownloadOrchestrator
 import com.pego.music.data.extractor.YouTubeExtractorRepository
@@ -26,4 +27,5 @@ class AppContainer(context: Context) {
     val audioTrimmer = AudioTrimmer(appContext)
     val downloadOrchestrator = DownloadOrchestrator(appContext, database.pegoDao())
     val playerController = PlayerController(appContext, extractorRepo)
+    val accessRepository = AccessRepository(appContext, httpClient, BuildConfig.ACCESS_SERVER_URL)
 }
