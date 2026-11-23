@@ -22,7 +22,7 @@ jobs:
             exit 1
           fi
           if [ -z "$MAREA_KEYSTORE_BASE64" ] || [ -z "$MAREA_KEYSTORE_PASSWORD" ]; then
-            echo "::warning::Faltan MAREA_KEYSTORE_BASE64 / MAREA_KEYSTORE_PASSWORD: se compila un APK debug con una llave temporal, que NO se puede instalar encima de otra versión."
+            echo "::warning::Faltan MAREA_KEYSTORE_BASE64 / MAREA_KEYSTORE_PASSWORD: se firma con una llave temporal, que NO se puede instalar encima de otra versión."
           fi
 
       - uses: actions/checkout@v4
@@ -37,31 +37,26 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Compilar APK firmado (llave fija)
-        if: env.MAREA_KEYSTORE_BASE64 != ''
+      # APK release (no debug): sin modo depuración la app corre mucho más fluida.
+      - name: Compilar APK
         run: |
           chmod +x gradlew
-          echo "$MAREA_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/marea-release.jks"
-          export MAREA_KEYSTORE_PATH="$RUNNER_TEMP/marea-release.jks"
-          export MAREA_KEYSTORE_PASS="$MAREA_KEYSTORE_PASSWORD"
-          export MAREA_KEY_PASS="$MAREA_KEYSTORE_PASSWORD"
-          export MAREA_KEY_ALIAS=marea
+          SUFFIX=""
+          if [ -n "$MAREA_KEYSTORE_BASE64" ]; then
+            echo "$MAREA_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/marea-release.jks"
+            export MAREA_KEYSTORE_PATH="$RUNNER_TEMP/marea-release.jks"
+            export MAREA_KEYSTORE_PASS="$MAREA_KEYSTORE_PASSWORD"
+            export MAREA_KEY_PASS="$MAREA_KEYSTORE_PASSWORD"
+            export MAREA_KEY_ALIAS=marea
+          else
+            SUFFIX="-llave-temporal"
+          fi
           ./gradlew assembleRelease \
             -PMAREA_VERSION_CODE="$MAREA_VERSION_CODE" \
             -PMAREA_VERSION_NAME="$MAREA_VERSION_NAME"
-          mkdir -p out
-          cp app/build/outputs/apk/release/app-release.apk "out/marea-$MAREA_VERSION_NAME.apk"
           rm -f "$RUNNER_TEMP/marea-release.jks"
-
-      - name: Compilar APK debug (sin llave fija)
-        if: env.MAREA_KEYSTORE_BASE64 == ''
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug \
-            -PMAREA_VERSION_CODE="$MAREA_VERSION_CODE" \
-            -PMAREA_VERSION_NAME="$MAREA_VERSION_NAME"
           mkdir -p out
-          cp app/build/outputs/apk/debug/app-debug.apk "out/marea-$MAREA_VERSION_NAME-debug.apk"
+          cp app/build/outputs/apk/release/app-release.apk "out/marea-$MAREA_VERSION_NAME$SUFFIX.apk"
 
       - uses: actions/upload-artifact@v4
         with:

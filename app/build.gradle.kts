@@ -45,8 +45,12 @@ android {
             // Sin R8 por ahora: evita fallos por reflexión (NewPipe/Rhino) mientras no se pruebe a fondo.
             isMinifyEnabled = false
             isShrinkResources = false
-            if (!System.getenv("MAREA_KEYSTORE_PATH").isNullOrBlank()) {
-                signingConfig = signingConfigs.getByName("release")
+            // Con la llave fija (secretos del workflow) las actualizaciones se instalan encima.
+            // Sin ella se firma con la llave debug temporal, solo para pruebas.
+            signingConfig = if (!System.getenv("MAREA_KEYSTORE_PATH").isNullOrBlank()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
             }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

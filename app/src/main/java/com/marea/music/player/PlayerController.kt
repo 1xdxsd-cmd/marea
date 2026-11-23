@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class RepeatMode {
     OFF,
@@ -57,6 +58,11 @@ class PlayerController(
 
     private val _uiState = MutableStateFlow(PlaybackUiState())
     val uiState: StateFlow<PlaybackUiState> = _uiState.asStateFlow()
+
+    // La posición cambia 4 veces por segundo: va en su propio flujo para que solo la barra
+    // de progreso y la letra se redibujen, no toda la app.
+    private val _position = MutableStateFlow(0L)
+    val position: StateFlow<Long> = _position.asStateFlow()
 
     private var mediaController: MediaController? = null
     private var originalQueue: List<TrackItem> = emptyList()
@@ -135,9 +141,9 @@ class PlayerController(
                 if (controller != null && controller.isPlaying) {
                     val pos = controller.currentPosition.coerceAtLeast(0L)
                     val dur = controller.duration.coerceAtLeast(_uiState.value.durationMs)
-                    _uiState.update {
-                        if (it.positionMs == pos && it.durationMs == dur) it
-                        else it.copy(positionMs = pos, durationMs = dur)
+                    _position.value = pos
+                    if (_uiState.value.durationMs != dur) {
+                        _uiState.update { it.copy(durationMs = dur) }
                     }
                 }
                 delay(250L)
@@ -280,7 +286,7 @@ class PlayerController(
     fun seekTo(positionMs: Long) {
         if (_uiState.value.isAd) return
         mediaController?.seekTo(positionMs)
-        _uiState.update { it.copy(positionMs = positionMs) }
+        _position.value = positionMs
     }
 
     fun refreshTrackMetadata(updatedTrack: TrackItem, replayAudio: Boolean = false) {
@@ -352,6 +358,7 @@ class PlayerController(
         val resId = AD_RESOURCES[nextAd]
         nextAd = (nextAd + 1) % AD_RESOURCES.size
 
+        _position.value = 0L
         _uiState.update {
             it.copy(
                 currentTrack = AD_TRACK,
@@ -399,6 +406,7 @@ class PlayerController(
         prefetchJob?.cancel()
 
         playJob = scope.launch {
+            _position.value = 0L
             _uiState.update {
                 it.copy(
                     currentTrack = track,
@@ -411,7 +419,7 @@ class PlayerController(
                 )
             }
             try {
-                val playableUri = resolvePlayableUri(track)
+                val playableUri = withContext(Dispatchers.IO) { resolvePlayableUri(track) }
                 val metadata = MediaMetadata.Builder()
                     .setTitle(track.cleanTitle.ifBlank { track.title })
                     .setArtist(track.artist)
@@ -477,6 +485,7 @@ class PlayerController(
     private fun continueWithRadio(fromIndex: Int) {
         val radio = radioQueue
         if (radio == null) {
+            _position.value = 0L
             _uiState.update { it.copy(isPlaying = false, positionMs = 0L) }
             return
         }
@@ -493,6 +502,7 @@ class PlayerController(
                 currentIndex = fromIndex + 1
                 playAtIndex(currentIndex)
             } else {
+                _position.value = 0L
                 _uiState.update { it.copy(isPlaying = false, isBuffering = false, positionMs = 0L) }
             }
         }

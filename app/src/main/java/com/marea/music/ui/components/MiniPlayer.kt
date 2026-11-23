@@ -23,6 +23,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import coil.imageLoader
+import coil.request.ImageRequest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,9 +53,17 @@ fun MiniPlayer(
     modifier: Modifier = Modifier
 ) {
     val track = playbackState.currentTrack ?: return
-    val progress = if (playbackState.durationMs > 0) {
-        (playbackState.positionMs.toFloat() / playbackState.durationMs.toFloat()).coerceIn(0f, 1f)
-    } else 0f
+    val position = LocalPlaybackPosition.current.collectAsState()
+    val durationMs = playbackState.durationMs
+    val context = LocalContext.current
+    // Deja lista la portada grande para que el reproductor abra sin esperar la imagen.
+    LaunchedEffect(track.bestCoverUrl) {
+        if (track.bestCoverUrl.isNotBlank()) {
+            context.imageLoader.enqueue(
+                ImageRequest.Builder(context).data(track.bestCoverUrl).size(900).build()
+            )
+        }
+    }
     val shape = RoundedCornerShape(22.dp)
 
     Box(
@@ -139,7 +154,12 @@ fun MiniPlayer(
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .fillMaxWidth(progress)
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        val p = if (durationMs > 0) (position.value.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+                        scaleX = p
+                        transformOrigin = TransformOrigin(0f, 0.5f)
+                    }
                     .background(Glass.accentHorizontal)
             )
         }

@@ -71,6 +71,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.marea.music.player.PlaybackUiState
+import androidx.compose.runtime.derivedStateOf
 import com.marea.music.player.RepeatMode
 import com.marea.music.ui.theme.MareaAccent
 import com.marea.music.ui.theme.MareaBg
@@ -228,8 +229,7 @@ fun FullPlayerSheet(
 
                 Spacer(Modifier.height(18.dp))
 
-                GlowSeekBar(
-                    positionMs = playbackState.positionMs,
+                PositionedSeekBar(
                     durationMs = playbackState.durationMs,
                     onSeek = onSeekTo,
                     enabled = !playbackState.isAd
@@ -252,7 +252,6 @@ fun FullPlayerSheet(
                     LyricsPanel(
                         lyrics = lyrics,
                         isLoading = isLoadingLyrics,
-                        positionMs = playbackState.positionMs,
                         onSeekTo = onSeekTo
                     )
                 } else {
@@ -483,11 +482,15 @@ private fun ToggleControl(
 private fun LyricsPanel(
     lyrics: LyricsResult?,
     isLoading: Boolean,
-    positionMs: Long,
     onSeekTo: (Long) -> Unit
 ) {
     val synced = remember(lyrics) { LrcParser.parse(lyrics?.syncedLyrics) }
-    val active = LrcParser.activeIndex(synced, positionMs + 250L)
+    // Solo se recompone cuando cambia la línea activa, no en cada tic de la posición.
+    val position = LocalPlaybackPosition.current.collectAsState()
+    val activeState = remember(synced) {
+        derivedStateOf { LrcParser.activeIndex(synced, position.value + 250L) }
+    }
+    val active = activeState.value
     val listState = rememberLazyListState()
 
     LaunchedEffect(active, synced) {
@@ -567,4 +570,20 @@ private fun LyricsPanel(
             )
         }
     }
+}
+
+/** Barra de progreso que lee la posición por su cuenta (no recompone todo el reproductor). */
+@Composable
+private fun PositionedSeekBar(
+    durationMs: Long,
+    onSeek: (Long) -> Unit,
+    enabled: Boolean
+) {
+    val position by LocalPlaybackPosition.current.collectAsState()
+    GlowSeekBar(
+        positionMs = position,
+        durationMs = durationMs,
+        onSeek = onSeek,
+        enabled = enabled
+    )
 }

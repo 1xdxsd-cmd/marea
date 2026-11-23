@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.marea.music.ui.components.Glass
 import com.marea.music.ui.components.LocalIsPremium
 import com.marea.music.ui.components.MareaBackdrop
+import com.marea.music.ui.components.LocalPlaybackPosition
 import com.marea.music.ui.components.glow
 import com.marea.music.ui.theme.MareaAccent
 import com.marea.music.ui.theme.MareaCyan
@@ -160,7 +161,10 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    CompositionLocalProvider(LocalIsPremium provides playbackState.isPremium) {
+                    CompositionLocalProvider(
+                        LocalIsPremium provides playbackState.isPremium,
+                        LocalPlaybackPosition provides container.playerController.position
+                    ) {
                     Scaffold(
                         containerColor = Color.Transparent,
                         contentColor = MareaText,
