@@ -12,6 +12,7 @@ import androidx.media3.session.SessionToken
 import com.marea.music.R
 import com.marea.music.data.extractor.YouTubeExtractorRepository
 import com.marea.music.data.history.ListeningHistory
+import com.marea.music.data.podcast.PodcastProgressStore
 import com.marea.music.domain.model.TrackItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -73,6 +74,7 @@ class PlayerController(
     private var radioJob: Job? = null
     private var errorSkipJob: Job? = null
     private var consecutiveErrors = 0
+    private var podcastTicks = 0
 
     // ---- Plan gratis: anuncios y límite de saltos ----
     private val freePrefs = context.getSharedPreferences(FREE_PREFS, Context.MODE_PRIVATE)
@@ -85,6 +87,7 @@ class PlayerController(
     init {
         EqualizerManager.init(context)
         VolumeBoostManager.init(context)
+        PodcastProgressStore.init(context)
         connectController()
         startProgressTicker()
     }
@@ -101,6 +104,7 @@ class PlayerController(
                 controller.addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
                         _uiState.update { it.copy(isPlaying = isPlaying) }
+                        if (!isPlaying) savePodcastProgress()
                     }
 
                     override fun onPlaybackStateChanged(playbackState: Int) {
@@ -142,6 +146,7 @@ class PlayerController(
                     val pos = controller.currentPosition.coerceAtLeast(0L)
                     val dur = controller.duration.coerceAtLeast(_uiState.value.durationMs)
                     _position.value = pos
+                    if (++podcastTicks % 20 == 0) savePodcastProgress()
                     if (_uiState.value.durationMs != dur) {
                         _uiState.update { it.copy(durationMs = dur) }
                     }
@@ -209,6 +214,7 @@ class PlayerController(
     }
 
     private fun handleTrackEnded() {
+        _uiState.value.currentTrack?.takeIf { it.isPodcast }?.let { PodcastProgressStore.markFinished(it.id) }
         if (activeQueue.isEmpty()) return
         when (_uiState.value.repeatMode) {
             RepeatMode.ONE -> {
@@ -395,6 +401,7 @@ class PlayerController(
 
     private fun playAtIndex(index: Int, countForAds: Boolean = true) {
         val track = activeQueue.getOrNull(index) ?: return
+        savePodcastProgress()
         if (countForAds && !premium) {
             if (songsSinceAd >= SONGS_BETWEEN_ADS && mediaController != null) {
                 playAd(index)
@@ -434,10 +441,13 @@ class PlayerController(
                     .build()
 
                 val controller = mediaController ?: return@launch
-                controller.setMediaItem(mediaItem)
+                // Los episodios de podcast siguen desde donde te quedaste.
+                val startMs = if (track.isPodcast) PodcastProgressStore.resumePositionMs(track.id) else 0L
+                if (startMs > 0L) _position.value = startMs
+                controller.setMediaItem(mediaItem, startMs)
                 controller.prepare()
                 controller.play()
-                history?.record(track)
+                if (!track.isPodcast) history?.record(track)
                 consecutiveErrors = 0
 
                 prefetchNextTrack()
@@ -456,6 +466,14 @@ class PlayerController(
         }
     }
 
+    private fun savePodcastProgress() {
+        val track = _uiState.value.currentTrack?.takeIf { it.isPodcast } ?: return
+        val controller = mediaController ?: return
+        val pos = controller.currentPosition.coerceAtLeast(0L)
+        if (pos < 5_000L) return
+        PodcastProgressStore.save(track.id, pos, controller.duration.coerceAtLeast(_uiState.value.durationMs))
+    }
+
     // ---------- Radio: seguir con canciones parecidas ----------
 
     /** Cuando quedan pocas canciones en la cola, agrega parecidas en segundo plano. */
@@ -465,6 +483,7 @@ class PlayerController(
         if (currentIndex < activeQueue.size - 2) return
         if (radioJob?.isActive == true) return
         val seed = activeQueue.getOrNull(currentIndex) ?: return
+        if (seed.isPodcast) return
         radioJob = scope.launch {
             val added = runCatching { radio.similarTo(seed, activeQueue) }.getOrDefault(emptyList())
             if (added.isNotEmpty()) appendToQueue(added)
@@ -483,7 +502,8 @@ class PlayerController(
 
     /** Se acabó la cola: espera (o pide) las parecidas y sigue sonando. */
     private fun continueWithRadio(fromIndex: Int) {
-        val radio = radioQueue
+        // Los podcasts no siguen con canciones parecidas.
+        val radio = radioQueue?.takeIf { activeQueue.getOrNull(fromIndex)?.isPodcast != true }
         if (radio == null) {
             _position.value = 0L
             _uiState.update { it.copy(isPlaying = false, positionMs = 0L) }
@@ -539,6 +559,7 @@ class PlayerController(
             else -> return
         }
         val nextTrack = activeQueue.getOrNull(nextIndex) ?: return
+        if (nextTrack.isPodcast) return
         if (!nextTrack.localUri.isNullOrBlank() || !nextTrack.localFilePath.isNullOrBlank()) return
 
         prefetchJob?.cancel()
@@ -560,6 +581,7 @@ class PlayerController(
     }
 
     private suspend fun resolvePlayableUri(track: TrackItem): Uri {
+        if (track.isPodcast) return Uri.parse(track.sourceUrl)
         track.localUri?.takeIf { it.isNotBlank() }?.let { uriStr ->
             val parsed = Uri.parse(uriStr)
             if (isLocalUriReadable(parsed)) return parsed

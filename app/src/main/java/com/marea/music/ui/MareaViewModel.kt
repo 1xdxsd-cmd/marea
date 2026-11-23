@@ -223,7 +223,7 @@ class MareaViewModel(
         // La letra sigue a la canción que suena, también con siguiente/anterior y audífonos.
         viewModelScope.launch {
             container.playerController.uiState
-                .map { state -> state.currentTrack?.takeIf { !state.isAd } }
+                .map { state -> state.currentTrack?.takeIf { !state.isAd && !it.isPodcast } }
                 .distinctUntilChanged { a, b -> a?.id == b?.id }
                 .collect { track -> loadLyricsFor(track) }
         }

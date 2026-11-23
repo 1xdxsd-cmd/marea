@@ -30,6 +30,10 @@ data class TrackItem(
 
     val isDownloaded: Boolean
         get() = downloadStatus == DownloadStatus.COMPLETED && (!localUri.isNullOrBlank() || !localFilePath.isNullOrBlank())
+
+    /** Episodio de podcast: el audio sale directo del RSS (no de YouTube). */
+    val isPodcast: Boolean
+        get() = id.startsWith("podcast:")
 }
 
 data class PlaylistPreview(

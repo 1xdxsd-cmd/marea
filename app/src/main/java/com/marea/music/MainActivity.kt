@@ -34,6 +34,9 @@ import androidx.compose.ui.unit.dp
 import com.marea.music.ui.components.Glass
 import com.marea.music.ui.components.LocalIsPremium
 import com.marea.music.ui.components.MareaBackdrop
+import com.marea.music.ui.PodcastViewModel
+import com.marea.music.ui.screens.PodcastsScreen
+import androidx.compose.material.icons.rounded.Podcasts
 import com.marea.music.ui.components.LocalPlaybackPosition
 import com.marea.music.ui.components.glow
 import com.marea.music.ui.theme.MareaAccent
@@ -87,6 +90,10 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: MareaViewModel by viewModels {
         MareaViewModel.factory((application as MareaApp).container)
+    }
+
+    private val podcastViewModel: PodcastViewModel by viewModels {
+        PodcastViewModel.factory((application as MareaApp).container)
     }
 
     private val container get() = (application as MareaApp).container
@@ -264,7 +271,24 @@ class MainActivity : ComponentActivity() {
                                     onCreateNewPlaylist = { showCreatePlaylist = true }
                                 )
 
-                                3 -> (accessState as? AccessState.SignedIn)?.let { signedIn ->
+                                3 -> {
+                                    val podcastState by podcastViewModel.state.collectAsState()
+                                    val following by podcastViewModel.following.collectAsState()
+                                    PodcastsScreen(
+                                        state = podcastState,
+                                        following = following,
+                                        currentTrackId = playbackState.currentTrack?.id,
+                                        onQueryChange = podcastViewModel::updateQuery,
+                                        onSearch = podcastViewModel::search,
+                                        onOpenShow = { podcastViewModel.openShow(it) },
+                                        onRefreshShow = { podcastViewModel.openShow(it, refresh = true) },
+                                        onCloseShow = podcastViewModel::closeShow,
+                                        onToggleFollow = podcastViewModel::toggleFollow,
+                                        onPlayEpisode = podcastViewModel::playEpisode
+                                    )
+                                }
+
+                                4 -> (accessState as? AccessState.SignedIn)?.let { signedIn ->
                                     SubscriptionScreen(
                                         access = container.accessRepository,
                                         state = signedIn
@@ -387,6 +411,7 @@ private val NAV_DESTINATIONS = listOf(
     NavDestination("Inicio", Icons.Rounded.Home),
     NavDestination("Buscar", Icons.Rounded.Search),
     NavDestination("Biblioteca", Icons.Rounded.LibraryMusic),
+    NavDestination("Podcasts", Icons.Rounded.Podcasts),
     NavDestination("Cuenta", Icons.Rounded.AccountCircle)
 )
 

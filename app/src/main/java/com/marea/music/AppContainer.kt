@@ -9,6 +9,7 @@ import com.marea.music.data.download.DownloadOrchestrator
 import com.marea.music.data.extractor.YouTubeExtractorRepository
 import com.marea.music.data.local.MareaDatabase
 import com.marea.music.data.metadata.LyricsRepository
+import com.marea.music.data.podcast.PodcastRepository
 import com.marea.music.data.metadata.MetadataEnricher
 import com.marea.music.data.recommend.RecommendationEngine
 import com.marea.music.data.tagger.AudioTagger
@@ -30,6 +31,7 @@ class AppContainer(context: Context) {
     val listeningHistory = ListeningHistory(appContext)
     val radioQueue = RadioQueue(extractorRepo, database.mareaDao())
     val playerController = PlayerController(appContext, extractorRepo, listeningHistory, radioQueue)
+    val podcastRepository = PodcastRepository(appContext, httpClient)
     val accessRepository = AccessRepository(appContext, httpClient, BuildConfig.ACCESS_SERVER_URL)
     val accessMonitor = AccessMonitor(accessRepository, playerController).also { it.start() }
 }

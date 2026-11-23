@@ -125,6 +125,7 @@ fun FullPlayerSheet(
                 PlayerTopBar(
                     label = when {
                         playbackState.isAd -> "Anuncio"
+                        track.isPodcast -> "Podcast"
                         track.isDownloaded -> "Sin conexión"
                         else -> "En streaming"
                     },
@@ -196,13 +197,13 @@ fun FullPlayerSheet(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
-                                .clickable(enabled = track.artist.isNotBlank() && !playbackState.isAd) {
+                                .clickable(enabled = track.artist.isNotBlank() && !playbackState.isAd && !track.isPodcast) {
                                     onArtistClick(track.artist)
                                 }
                                 .padding(vertical = 2.dp)
                         )
                     }
-                    if (!playbackState.isAd) {
+                    if (!playbackState.isAd && !track.isPodcast) {
                         Spacer(Modifier.width(8.dp))
                         GlassIconButton(
                             icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
@@ -248,7 +249,9 @@ fun FullPlayerSheet(
 
                 Spacer(Modifier.height(28.dp))
 
-                if (!playbackState.isAd) {
+                if (track.isPodcast) {
+                    // Los episodios no tienen letra.
+                } else if (!playbackState.isAd) {
                     LyricsPanel(
                         lyrics = lyrics,
                         isLoading = isLoadingLyrics,
