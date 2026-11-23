@@ -9,6 +9,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.pego.music.R
 import com.pego.music.data.extractor.YouTubeExtractorRepository
 import com.pego.music.domain.model.TrackItem
 import kotlinx.coroutines.CoroutineScope
@@ -38,7 +39,11 @@ data class PlaybackUiState(
     val durationMs: Long = 0L,
     val shuffleEnabled: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.OFF,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    /** Está sonando un anuncio (plan gratis). */
+    val isAd: Boolean = false,
+    /** Con Premium no hay anuncios, los saltos son ilimitados y hay ecualizador. */
+    val isPremium: Boolean = false
 )
 
 class PlayerController(
@@ -57,7 +62,16 @@ class PlayerController(
     private var playJob: Job? = null
     private var prefetchJob: Job? = null
 
+    // ---- Plan gratis: anuncios y límite de saltos ----
+    private val freePrefs = context.getSharedPreferences(FREE_PREFS, Context.MODE_PRIVATE)
+    private var premium = false
+    private var songsSinceAd = 0
+    private var nextAd = (0 until AD_RESOURCES.size).random()
+    /** Canción que sonará cuando termine el anuncio. */
+    private var indexAfterAd: Int? = null
+
     init {
+        EqualizerManager.init(context)
         connectController()
         startProgressTicker()
     }
@@ -84,11 +98,15 @@ class PlayerController(
                             )
                         }
                         if (playbackState == Player.STATE_ENDED) {
-                            handleTrackEnded()
+                            if (_uiState.value.isAd) finishAd() else handleTrackEnded()
                         }
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
+                        if (_uiState.value.isAd) {
+                            finishAd()
+                            return
+                        }
                         _uiState.update {
                             it.copy(
                                 isBuffering = false,
@@ -129,12 +147,22 @@ class PlayerController(
             activeQueue = queue
             currentIndex = queue.indexOfFirst { it.id == track.id }.takeIf { it >= 0 } ?: 0
         }
+        if (_uiState.value.isAd) {
+            // La canción elegida suena en cuanto termine el anuncio.
+            indexAfterAd = currentIndex
+            _uiState.update { it.copy(queue = activeQueue) }
+            return
+        }
         playAtIndex(currentIndex)
     }
 
     fun toggleShuffle() {
         val nextShuffle = !_uiState.value.shuffleEnabled
-        val currentTrack = _uiState.value.currentTrack
+        val currentTrack = if (_uiState.value.isAd) {
+            indexAfterAd?.let { activeQueue.getOrNull(it) }
+        } else {
+            _uiState.value.currentTrack
+        }
         if (originalQueue.isNotEmpty()) {
             if (nextShuffle) {
                 if (currentTrack != null) {
@@ -152,6 +180,7 @@ class PlayerController(
                 } else 0
             }
         }
+        if (_uiState.value.isAd && indexAfterAd != null) indexAfterAd = currentIndex
         _uiState.update { it.copy(shuffleEnabled = nextShuffle, queue = activeQueue) }
         prefetchNextTrack()
     }
@@ -189,16 +218,21 @@ class PlayerController(
 
     fun playNext() {
         if (activeQueue.isEmpty()) return
+        if (blockedByAd()) return
+        val hasNext = currentIndex + 1 < activeQueue.size || _uiState.value.repeatMode == RepeatMode.ALL
+        if (!hasNext) return
+        if (!consumeFreeSkip()) return
         if (currentIndex + 1 < activeQueue.size) {
             currentIndex += 1
             playAtIndex(currentIndex)
-        } else if (_uiState.value.repeatMode == RepeatMode.ALL) {
+        } else {
             currentIndex = 0
             playAtIndex(currentIndex)
         }
     }
 
     fun playPrevious() {
+        if (blockedByAd()) return
         val controller = mediaController
         if (controller != null && controller.currentPosition > 3_000L) {
             controller.seekTo(0L)
@@ -224,6 +258,7 @@ class PlayerController(
     }
 
     fun seekTo(positionMs: Long) {
+        if (_uiState.value.isAd) return
         mediaController?.seekTo(positionMs)
         _uiState.update { it.copy(positionMs = positionMs) }
     }
@@ -240,7 +275,7 @@ class PlayerController(
                 )
             }
             if (replayAudio) {
-                playAtIndex(currentIndex)
+                playAtIndex(currentIndex, countForAds = false)
             }
         }
     }
@@ -249,8 +284,97 @@ class PlayerController(
         _uiState.update { it.copy(errorMessage = null) }
     }
 
-    private fun playAtIndex(index: Int) {
+    // ---------- Plan gratis / Premium ----------
+
+    /** Lo actualiza la app según la suscripción de la cuenta. */
+    fun setPremium(value: Boolean) {
+        EqualizerManager.setPremium(value)
+        if (premium == value) return
+        premium = value
+        _uiState.update { it.copy(isPremium = value) }
+        if (value && _uiState.value.isAd) finishAd()
+    }
+
+    private fun blockedByAd(): Boolean {
+        if (!_uiState.value.isAd) return false
+        _uiState.update { it.copy(errorMessage = "Tu música sigue después del anuncio") }
+        return true
+    }
+
+    /** Plan gratis: máximo [FREE_SKIPS_PER_HOUR] saltos por hora. Devuelve false si ya no quedan. */
+    private fun consumeFreeSkip(): Boolean {
+        if (premium) return true
+        val now = System.currentTimeMillis()
+        val recent = freePrefs.getString(KEY_SKIPS, "").orEmpty()
+            .split(",")
+            .mapNotNull { it.toLongOrNull() }
+            .filter { now - it < HOUR_MS }
+        if (recent.size >= FREE_SKIPS_PER_HOUR) {
+            val minutes = ((HOUR_MS - (now - recent.min())) / 60_000L + 1).coerceAtLeast(1L)
+            _uiState.update {
+                it.copy(
+                    errorMessage = "Llegaste al límite de $FREE_SKIPS_PER_HOUR saltos por hora. " +
+                        "Podrás saltar de nuevo en $minutes min, o hazte Premium para saltar sin límite."
+                )
+            }
+            return false
+        }
+        freePrefs.edit().putString(KEY_SKIPS, (recent + now).joinToString(",")).apply()
+        return true
+    }
+
+    private fun playAd(nextIndex: Int) {
+        val controller = mediaController ?: return
+        playJob?.cancel()
+        prefetchJob?.cancel()
+        indexAfterAd = nextIndex
+        songsSinceAd = 0
+        val resId = AD_RESOURCES[nextAd]
+        nextAd = (nextAd + 1) % AD_RESOURCES.size
+
+        _uiState.update {
+            it.copy(
+                currentTrack = AD_TRACK,
+                queue = activeQueue,
+                isAd = true,
+                isBuffering = true,
+                positionMs = 0L,
+                durationMs = 0L,
+                errorMessage = null
+            )
+        }
+        val mediaItem = MediaItem.Builder()
+            .setMediaId(AD_TRACK.id)
+            .setUri(Uri.parse("android.resource://${context.packageName}/$resId"))
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(AD_TRACK.title)
+                    .setArtist(AD_TRACK.artist)
+                    .build()
+            )
+            .build()
+        controller.setMediaItem(mediaItem)
+        controller.prepare()
+        controller.play()
+    }
+
+    private fun finishAd() {
+        val next = indexAfterAd ?: currentIndex
+        indexAfterAd = null
+        _uiState.update { it.copy(isAd = false) }
+        currentIndex = next
+        playAtIndex(next, countForAds = false)
+    }
+
+    private fun playAtIndex(index: Int, countForAds: Boolean = true) {
         val track = activeQueue.getOrNull(index) ?: return
+        if (countForAds && !premium) {
+            if (songsSinceAd >= SONGS_BETWEEN_ADS && mediaController != null) {
+                playAd(index)
+                return
+            }
+            songsSinceAd += 1
+        }
         playJob?.cancel()
         prefetchJob?.cancel()
 
@@ -259,6 +383,7 @@ class PlayerController(
                 it.copy(
                     currentTrack = track,
                     queue = activeQueue,
+                    isAd = false,
                     isBuffering = true,
                     positionMs = 0L,
                     durationMs = track.durationSeconds * 1000L,
@@ -353,5 +478,33 @@ class PlayerController(
             "file" -> uri.path?.let { java.io.File(it).let { f -> f.exists() && f.length() > 0L } } ?: false
             else -> false
         }
+    }
+
+    private companion object {
+        const val FREE_PREFS = "marea_free"
+        const val KEY_SKIPS = "skips"
+        const val HOUR_MS = 60L * 60L * 1000L
+
+        /** Plan gratis: saltos permitidos por hora. */
+        const val FREE_SKIPS_PER_HOUR = 6
+
+        /** Plan gratis: un anuncio cada tantas canciones. */
+        const val SONGS_BETWEEN_ADS = 3
+
+        val AD_RESOURCES = intArrayOf(
+            R.raw.marea_ad_1,
+            R.raw.marea_ad_2,
+            R.raw.marea_ad_3,
+            R.raw.marea_ad_4,
+            R.raw.marea_ad_5
+        )
+
+        val AD_TRACK = TrackItem(
+            id = "marea_ad",
+            title = "Anuncio",
+            cleanTitle = "Anuncio",
+            artist = "Tu música sigue en unos segundos",
+            sourceUrl = ""
+        )
     }
 }

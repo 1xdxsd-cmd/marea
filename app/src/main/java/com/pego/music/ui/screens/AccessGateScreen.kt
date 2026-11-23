@@ -59,8 +59,9 @@ import com.pego.music.ui.theme.MareaTextSecondary
 import kotlinx.coroutines.launch
 
 /**
- * Muestra [content] solo si hay sesión iniciada y la cuenta tiene una suscripción activa.
- * Sin sesión: inicio de sesión / registro. Con sesión pero sin plan: sección de suscripción.
+ * Muestra [content] cuando hay sesión iniciada. Sin sesión: inicio de sesión / registro.
+ * Sin suscripción la app funciona en el plan gratis (anuncios y saltos limitados);
+ * el código se activa en la pestaña Cuenta.
  */
 @Composable
 fun AccessGate(
@@ -77,18 +78,7 @@ fun AccessGate(
         }
 
         is AccessState.SignedOut -> LoginScreen(access = access, state = s)
-        is AccessState.SignedIn -> if (s.hasAccess) {
-            content()
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MareaBg)
-                    .systemBarsPadding()
-            ) {
-                SubscriptionScreen(access = access, state = s)
-            }
-        }
+        is AccessState.SignedIn -> content()
     }
 }
 
@@ -324,7 +314,7 @@ fun SubscriptionScreen(
             error = access.redeem(code)
             if (error == null) {
                 code = ""
-                success = "¡Listo! Tu suscripción está activa."
+                success = "¡Listo! Ya tienes Premium."
             }
             loading = false
         }
@@ -367,7 +357,7 @@ fun SubscriptionScreen(
                 .padding(18.dp)
         ) {
             if (sub != null && sub.active) {
-                Text("Plan ${sub.planLabel}", color = MareaAccent, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text("Premium · Plan ${sub.planLabel}", color = MareaAccent, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Spacer(Modifier.height(4.dp))
                 Text(sub.family, color = MareaText, style = MaterialTheme.typography.bodyLarge)
                 if (state.offline) {
@@ -379,10 +369,12 @@ fun SubscriptionScreen(
                     )
                 }
             } else {
-                Text("Sin suscripción activa", color = MareaText, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text("Plan gratis", color = MareaText, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Ingresa el código de invitación de tu plan para empezar a usar Marea.",
+                    "Con anuncios y hasta 6 saltos de canción por hora. Ingresa el código de " +
+                        "invitación de tu plan para pasarte a Premium: sin anuncios, saltos sin " +
+                        "límite y ecualizador.",
                     color = MareaTextSecondary,
                     style = MaterialTheme.typography.bodyMedium
                 )

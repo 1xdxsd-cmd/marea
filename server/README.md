@@ -14,8 +14,9 @@ Controla quién puede usar la app:
 | `duo` (Dúo) | 2 |
 | `family` (Familiar) | 6 |
 
-Si revocas a alguien o desactivas el plan, pierde el acceso en su próxima verificación (sigue
-pudiendo iniciar sesión, pero la app le pide un código nuevo).
+Sin código activo la cuenta usa el **plan gratis** de la app (anuncios cada 3 canciones y hasta 6
+saltos por hora). Con código es **Premium** (sin anuncios, saltos sin límite y ecualizador). Si
+revocas a alguien o desactivas el plan, vuelve al plan gratis en su próxima verificación.
 
 ## Instalar / actualizar
 

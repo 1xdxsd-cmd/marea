@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.ContentCut
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Lyrics
@@ -85,7 +86,8 @@ fun FullPlayerSheet(
     onAddToPlaylist: (TrackItem) -> Unit,
     onEditCover: (TrackItem) -> Unit,
     onTrimTrack: (TrackItem) -> Unit,
-    onArtistClick: (String) -> Unit
+    onArtistClick: (String) -> Unit,
+    onOpenEqualizer: () -> Unit = {}
 ) {
     val track = syncedTrack ?: playbackState.currentTrack ?: return
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -119,18 +121,30 @@ fun FullPlayerSheet(
                     style = MaterialTheme.typography.labelMedium,
                     color = MareaAccent
                 )
-                IconButton(onClick = { showLyrics = !showLyrics }) {
-                    Icon(
-                        imageVector = Icons.Rounded.Lyrics,
-                        contentDescription = "Letras",
-                        tint = if (showLyrics) MareaAccent else MareaTextSecondary
-                    )
+                Row {
+                    IconButton(onClick = onOpenEqualizer) {
+                        Icon(
+                            imageVector = Icons.Rounded.GraphicEq,
+                            contentDescription = "Ecualizador",
+                            tint = MareaTextSecondary
+                        )
+                    }
+                    IconButton(
+                        onClick = { showLyrics = !showLyrics },
+                        enabled = !playbackState.isAd
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Lyrics,
+                            contentDescription = "Letras",
+                            tint = if (showLyrics) MareaAccent else MareaTextSecondary
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            if (showLyrics) {
+            if (showLyrics && !playbackState.isAd) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -226,7 +240,7 @@ fun FullPlayerSheet(
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
-                        .clickable(enabled = track.artist.isNotBlank()) {
+                        .clickable(enabled = track.artist.isNotBlank() && !playbackState.isAd) {
                             onArtistClick(track.artist)
                         }
                         .padding(horizontal = 8.dp, vertical = 2.dp)
@@ -235,8 +249,8 @@ fun FullPlayerSheet(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 2. Options below song name & artist
-            Row(
+            // 2. Options below song name & artist (no aplican a un anuncio)
+            if (!playbackState.isAd) Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically

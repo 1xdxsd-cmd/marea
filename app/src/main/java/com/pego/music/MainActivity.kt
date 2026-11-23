@@ -46,6 +46,7 @@ import com.pego.music.ui.PegoViewModel
 import com.pego.music.ui.components.AddToPlaylistDialog
 import com.pego.music.ui.components.ArtistSheet
 import com.pego.music.ui.components.CreatePlaylistDialog
+import com.pego.music.ui.components.EqualizerSheet
 import com.pego.music.ui.components.EditCoverDialog
 import com.pego.music.ui.components.FullPlayerSheet
 import com.pego.music.ui.components.MiniPlayer
@@ -78,10 +79,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         askNotificationPermissionIfNeeded()
 
-        // Si se cierra la sesión o se pierde la suscripción, detener la reproducción.
+        // Premium según la suscripción; si se cierra la sesión, detener la reproducción.
         lifecycleScope.launch {
             container.accessRepository.state.collect { state ->
-                if (!state.hasAccess) container.playerController.pause()
+                container.playerController.setPremium(state.hasAccess)
+                if (state is AccessState.SignedOut) container.playerController.pause()
             }
         }
 
@@ -98,6 +100,7 @@ class MainActivity : ComponentActivity() {
                     var trackForTrim by remember { mutableStateOf<TrackItem?>(null) }
                     var trackForCover by remember { mutableStateOf<TrackItem?>(null) }
                     var showCreatePlaylist by remember { mutableStateOf(false) }
+                    var showEqualizer by remember { mutableStateOf(false) }
 
                     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -293,8 +296,13 @@ class MainActivity : ComponentActivity() {
                             onArtistClick = { artist ->
                                 showFullPlayer = false
                                 viewModel.openArtistPage(artist)
-                            }
+                            },
+                            onOpenEqualizer = { showEqualizer = true }
                         )
+                    }
+
+                    if (showEqualizer) {
+                        EqualizerSheet(onDismiss = { showEqualizer = false })
                     }
 
                     artistState?.let { currentArtist ->
@@ -373,7 +381,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (!container.accessRepository.state.value.hasAccess) return
+        if (container.accessRepository.state.value !is AccessState.SignedIn) return
         extractUrlFromIntent(intent)?.let { url ->
             viewModel.submitSearchOrLink(url)
         }
