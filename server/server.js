@@ -67,6 +67,9 @@ const appUser = (req) => {
 
 app.get('/healthz', (_req, res) => res.json({ ok: true }));
 
+// Planes disponibles con precio (los muestra la app en el plan gratis).
+app.get('/v1/plans', (_req, res) => res.json({ ok: true, plans: d.publicPlans() }));
+
 // ---------- API de la app ----------
 
 app.post(
@@ -318,7 +321,7 @@ admin.get(
   requireAdmin,
   handle(async (_req, res) => {
     res.json({
-      plans: Object.entries(d.PLANS).map(([id, p]) => ({ id, ...p })),
+      plans: d.publicPlans(),
       families: d.listAll(),
       users: d.listUsers(),
     });
@@ -329,8 +332,8 @@ admin.post(
   '/families',
   requireAdmin,
   handle(async (req, res) => {
-    const { name, plan } = req.body || {};
-    const id = d.createFamily(name, plan);
+    const { name, plan, days } = req.body || {};
+    const id = d.createFamily(name, plan, days === undefined ? undefined : Number(days) || null);
     res.json({ ok: true, id });
   })
 );
@@ -340,9 +343,11 @@ admin.patch(
   requireAdmin,
   handle(async (req, res) => {
     const id = Number(req.params.id);
-    const { plan, active } = req.body || {};
+    const { plan, active, expiresAt, renewDays } = req.body || {};
     if (plan !== undefined) d.setPlan(id, plan);
     if (active !== undefined) d.setFamilyActive(id, !!active);
+    if (expiresAt !== undefined) d.setExpiry(id, expiresAt);
+    if (renewDays !== undefined) d.renewFamily(id, Number(renewDays));
     res.json({ ok: true });
   })
 );

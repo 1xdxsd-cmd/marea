@@ -133,6 +133,7 @@ $('#refresh').addEventListener('click', () => act(() => Promise.resolve(), 'Actu
 $('#new-family').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const data = formData(ev.target);
+  data.days = Number(data.days) || 30;
   const r = await act(() => api('POST', '/families', data), 'Plan creado');
   if (r) ev.target.reset();
 });
@@ -155,7 +156,7 @@ async function load() {
 
 function planOptions(selected) {
   return state.plans.map((p) =>
-    el('option', { value: p.id, selected: p.id === selected }, `${p.label} (${p.seats} cupo${p.seats > 1 ? 's' : ''})`)
+    el('option', { value: p.id, selected: p.id === selected }, `${p.label} · $${p.price} (${p.seats} cupo${p.seats > 1 ? 's' : ''})`)
   );
 }
 
@@ -220,6 +221,30 @@ function renderFamily(f) {
       },
     },
     active ? 'Desactivar' : 'Reactivar'
+  );
+
+  const toDateInput = (ts) => {
+    if (!ts) return '';
+    const dt = new Date(ts);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+  };
+  const expiryInput = el('input', {
+    type: 'date',
+    value: toDateInput(f.expires_at),
+    'aria-label': 'Vencimiento',
+    title: 'Vencimiento',
+    onchange: (ev) => {
+      const v = ev.target.value;
+      // Vence al final del día elegido (hora local).
+      const expiresAt = v ? new Date(`${v}T23:59:59`).getTime() : null;
+      act(() => api('PATCH', `/families/${f.id}`, { expiresAt }), v ? 'Vencimiento actualizado' : 'Sin vencimiento');
+    },
+  });
+  const renew = el(
+    'button',
+    { class: 'btn small', onclick: () => act(() => api('PATCH', `/families/${f.id}`, { renewDays: 30 }), 'Renovado 30 días') },
+    '+30 días'
   );
 
   const members = f.members.filter((m) => !m.revoked);
@@ -321,11 +346,17 @@ function renderFamily(f) {
       el(
         'div',
         { class: 'family-title' },
-        el('h3', {}, f.name, ' ', el('span', { class: `badge ${active ? 'on' : 'off'}` }, active ? 'Activo' : 'Desactivado')),
-        el('span', { class: 'meta' }, `#${f.id} · ${f.planLabel} · ${f.used.members}/${f.seats} miembros${f.used.pending ? ` · ${f.used.pending} invitación(es) pendiente(s)` : ''}${f.owner ? ` · dueño: ${f.owner.email}` : ''}`),
+        el(
+          'h3',
+          {},
+          f.name,
+          ' ',
+          el('span', { class: `badge ${active && !f.expired ? 'on' : 'off'}` }, !active ? 'Desactivado' : f.expired ? 'Vencido' : 'Activo')
+        ),
+        el('span', { class: 'meta' }, `#${f.id} · ${f.planLabel} · ${f.used.members}/${f.seats} miembros${f.used.pending ? ` · ${f.used.pending} invitación(es) pendiente(s)` : ''}${f.owner ? ` · dueño: ${f.owner.email}` : ''} · ${f.expires_at ? `vence ${fmt(f.expires_at)}` : 'sin vencimiento'}`),
         el('div', { class: 'seats', 'aria-hidden': 'true' }, seats)
       ),
-      el('div', { class: 'family-actions' }, planSelect, toggle)
+      el('div', { class: 'family-actions' }, planSelect, expiryInput, renew, toggle)
     ),
     el('div', { class: 'list' }, el('h4', {}, 'Miembros'), memberItems.length ? memberItems : el('p', { class: 'empty' }, 'Nadie todavía.')),
     inviteItems.length || emailItems.length

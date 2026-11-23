@@ -21,7 +21,21 @@ data class Subscription(
     val family: String,
     val label: String,
     val active: Boolean,
-    val details: FamilyDetails? = null
+    val details: FamilyDetails? = null,
+    /** Vencimiento del plan (ms) o null si no vence. */
+    val expiresAt: Long? = null,
+    val expired: Boolean = false,
+    val price: Int? = null,
+    val currency: String = "MXN"
+)
+
+/** Un plan que se puede contratar (se muestra en el plan gratis). */
+data class PlanOption(
+    val id: String,
+    val label: String,
+    val seats: Int,
+    val price: Int,
+    val currency: String
 )
 
 /** Personas del plan. Solo el dueño (quien puso el código) puede sumar o quitar correos. */
@@ -175,6 +189,26 @@ class AccessRepository(
         }
     }
 
+    /** Planes disponibles con precio. Sin conexión devuelve los precios conocidos. */
+    suspend fun fetchPlans(): List<PlanOption> = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url("$baseUrl/v1/plans").build()
+        runCatching {
+            client.newCall(request).execute().use { resp ->
+                val arr = JSONObject(resp.body?.string().orEmpty()).getJSONArray("plans")
+                (0 until arr.length()).map { i ->
+                    val p = arr.getJSONObject(i)
+                    PlanOption(
+                        id = p.optString("id"),
+                        label = p.optString("label"),
+                        seats = p.optInt("seats"),
+                        price = p.optInt("price"),
+                        currency = p.optString("currency").ifBlank { "MXN" }
+                    )
+                }
+            }
+        }.getOrNull()?.takeIf { it.isNotEmpty() } ?: DEFAULT_PLANS
+    }
+
     /** Dúo / Familiar: el dueño suma a una persona por correo. Devuelve null o el error. */
     suspend fun addFamilyEmail(email: String): String? =
         familyCall("POST", "/v1/family/members", JSONObject().put("email", email.trim()))
@@ -312,7 +346,11 @@ class AccessRepository(
             family = json.optString("family"),
             label = json.optString("label"),
             active = json.optBoolean("active", false),
-            details = parseDetails(json.optJSONObject("details"))
+            details = parseDetails(json.optJSONObject("details")),
+            expiresAt = json.optLong("expiresAt", 0L).takeIf { it > 0L },
+            expired = json.optBoolean("expired", false),
+            price = json.optInt("price", 0).takeIf { it > 0 },
+            currency = json.optString("currency").ifBlank { "MXN" }
         )
     }
 
@@ -408,6 +446,12 @@ class AccessRepository(
         const val KEY_LAST_OK = "last_ok"
 
         val JSON = "application/json; charset=utf-8".toMediaType()
+
+        val DEFAULT_PLANS = listOf(
+            PlanOption("solo", "Individual", 1, 50, "MXN"),
+            PlanOption("duo", "Dúo", 2, 80, "MXN"),
+            PlanOption("family", "Familiar", 6, 180, "MXN")
+        )
 
         /** Reverificar como máximo cada 15 minutos al volver a la app. */
         const val STALE_MS = 15L * 60L * 1000L

@@ -50,6 +50,10 @@ import com.marea.music.R
 import com.marea.music.data.access.AccessRepository
 import com.marea.music.data.access.AccessState
 import com.marea.music.data.access.FamilyDetails
+import com.marea.music.data.access.PlanOption
+import androidx.compose.runtime.produceState
+import java.text.SimpleDateFormat
+import java.util.Locale
 import androidx.compose.foundation.layout.Row
 import com.marea.music.ui.theme.BricolageGrotesque
 import com.marea.music.ui.theme.MareaAccent
@@ -362,6 +366,15 @@ fun SubscriptionScreen(
                 Text("Premium · Plan ${sub.planLabel}", color = MareaAccent, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Spacer(Modifier.height(4.dp))
                 Text(sub.family, color = MareaText, style = MaterialTheme.typography.bodyLarge)
+                sub.price?.let { price ->
+                    Text("$$price ${sub.currency} al mes", color = MareaTextSecondary, style = MaterialTheme.typography.bodyMedium)
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = sub.expiresAt?.let { expiryText(it) } ?: "Sin fecha de vencimiento",
+                    color = MareaText,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
                 if (state.offline) {
                     Spacer(Modifier.height(6.dp))
                     Text(
@@ -373,6 +386,14 @@ fun SubscriptionScreen(
             } else {
                 Text("Plan gratis", color = MareaText, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Spacer(Modifier.height(6.dp))
+                if (sub != null && sub.expired && sub.expiresAt != null) {
+                    Text(
+                        "Tu plan ${sub.planLabel} venció el ${formatDate(sub.expiresAt)}. Pide que lo renueven o activa otro código.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
                 Text(
                     "Con anuncios y hasta 6 saltos de canción por hora. Ingresa el código de " +
                         "invitación de tu plan para pasarte a Premium: sin anuncios, saltos sin " +
@@ -381,6 +402,14 @@ fun SubscriptionScreen(
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(Modifier.height(16.dp))
+                PlansList(access = access)
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "¿Ya tienes tu código? Escríbelo aquí:",
+                    color = MareaText,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
+                Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = code,
                     onValueChange = { code = it.uppercase().take(16) },
@@ -593,4 +622,68 @@ private fun FamilySection(
             style = MaterialTheme.typography.bodyMedium
         )
     }
+}
+
+private fun formatDate(ms: Long): String =
+    SimpleDateFormat("d 'de' MMMM 'de' yyyy", Locale("es")).format(java.util.Date(ms))
+
+private fun expiryText(ms: Long): String {
+    val days = ((ms - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0L)
+    val left = when (days) {
+        0L -> "vence hoy"
+        1L -> "queda 1 día"
+        else -> "quedan $days días"
+    }
+    return "Vence el ${formatDate(ms)} ($left)"
+}
+
+/** Planes que se pueden contratar, con precio y cuántas personas incluyen. */
+@Composable
+private fun PlansList(access: AccessRepository) {
+    val plans by produceState(initialValue = emptyList<PlanOption>(), access) {
+        value = access.fetchPlans()
+    }
+    Text(
+        "Planes Premium",
+        color = MareaText,
+        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+    )
+    Spacer(Modifier.height(8.dp))
+    if (plans.isEmpty()) {
+        CircularProgressIndicator(color = MareaAccent, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+        return
+    }
+    plans.forEach { plan ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+                .background(MareaBg, RoundedCornerShape(14.dp))
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(plan.label, color = MareaText, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(
+                    text = when (plan.seats) {
+                        1 -> "1 persona"
+                        else -> "Hasta ${plan.seats} personas"
+                    } + " · sin anuncios · saltos ilimitados · ecualizador",
+                    color = MareaTextSecondary,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            Spacer(Modifier.size(8.dp))
+            Column(horizontalAlignment = Alignment.End) {
+                Text("$${plan.price}", color = MareaAccent, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
+                Text("${plan.currency}/mes", color = MareaTextSecondary, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+    Spacer(Modifier.height(6.dp))
+    Text(
+        "Para contratar un plan pide tu código de invitación.",
+        color = MareaTextSecondary,
+        style = MaterialTheme.typography.bodySmall
+    )
 }
