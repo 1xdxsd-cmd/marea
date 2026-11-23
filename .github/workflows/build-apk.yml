@@ -58,6 +58,11 @@ jobs:
           mkdir -p out
           cp app/build/outputs/apk/release/app-release.apk "out/marea-$MAREA_VERSION_NAME$SUFFIX.apk"
 
+      - name: Mostrar la firma del APK
+        run: |
+          echo "Huella SHA-256 del certificado (debe ser siempre la misma con la llave fija):"
+          keytool -printcert -jarfile out/*.apk | grep -E "Owner|Propietario|SHA256" || true
+
       - uses: actions/upload-artifact@v4
         with:
           name: marea-apk
