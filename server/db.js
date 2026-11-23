@@ -7,11 +7,14 @@ const Database = require('better-sqlite3');
 const scrypt = promisify(crypto.scrypt);
 
 // Cupos por plan (miembros = personas que pueden entrar).
+// Precio mensual en pesos mexicanos.
 const PLANS = {
-  solo: { label: 'Individual', seats: 1 },
-  duo: { label: 'Dúo', seats: 2 },
-  family: { label: 'Familiar', seats: 6 },
+  solo: { label: 'Individual', seats: 1, price: 50 },
+  duo: { label: 'Dúo', seats: 2, price: 80 },
+  family: { label: 'Familiar', seats: 6, price: 180 },
 };
+const CURRENCY = 'MXN';
+const DEFAULT_PLAN_DAYS = 30;
 
 const dbPath = process.env.MAREA_DB || path.join(__dirname, 'marea.db');
 const db = new Database(dbPath);
@@ -76,6 +79,10 @@ db.exec('CREATE INDEX IF NOT EXISTS members_user ON members(user_id)');
 // Migración: quien canjea el primer código de un plan Dúo/Familiar es su dueño y puede
 // sumar a otras personas por correo.
 const familyCols = db.prepare('PRAGMA table_info(families)').all().map((c) => c.name);
+if (!familyCols.includes('expires_at')) {
+  // Vencimiento del plan (ms). NULL = sin vencimiento.
+  db.exec('ALTER TABLE families ADD COLUMN expires_at INTEGER');
+}
 if (!familyCols.includes('owner_user_id')) {
   db.exec('ALTER TABLE families ADD COLUMN owner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 }
@@ -164,13 +171,15 @@ function getFamily(familyId) {
   return fam;
 }
 
-function createFamily(name, plan) {
+const isExpired = (fam) => !!fam.expires_at && fam.expires_at < now();
+
+function createFamily(name, plan, days = DEFAULT_PLAN_DAYS) {
   name = String(name || '').trim();
   if (!name) throw httpError(400, 'Falta el nombre del plan');
   if (!PLANS[plan]) throw httpError(400, `Plan inválido: ${plan}. Usa: ${Object.keys(PLANS).join(', ')}`);
   const info = db
-    .prepare('INSERT INTO families (name, plan, created_at) VALUES (?, ?, ?)')
-    .run(name.slice(0, 80), plan, now());
+    .prepare('INSERT INTO families (name, plan, created_at, expires_at) VALUES (?, ?, ?, ?)')
+    .run(name.slice(0, 80), plan, now(), days ? now() + Number(days) * 86400000 : null);
   return Number(info.lastInsertRowid);
 }
 
@@ -178,6 +187,21 @@ function setPlan(familyId, plan) {
   if (!PLANS[plan]) throw httpError(400, `Plan inválido: ${plan}`);
   getFamily(familyId);
   db.prepare('UPDATE families SET plan = ? WHERE id = ?').run(plan, familyId);
+}
+
+// Fija el vencimiento (ms, o null para quitarlo).
+function setExpiry(familyId, expiresAt) {
+  getFamily(familyId);
+  const value = expiresAt == null ? null : Number(expiresAt);
+  if (value != null && !Number.isFinite(value)) throw httpError(400, 'Fecha inválida');
+  db.prepare('UPDATE families SET expires_at = ? WHERE id = ?').run(value, familyId);
+}
+
+// Suma días desde el vencimiento actual (o desde hoy si ya venció).
+function renewFamily(familyId, days = DEFAULT_PLAN_DAYS) {
+  const fam = getFamily(familyId);
+  const base = fam.expires_at && fam.expires_at > now() ? fam.expires_at : now();
+  db.prepare('UPDATE families SET expires_at = ? WHERE id = ?').run(base + Number(days) * 86400000, familyId);
 }
 
 function setFamilyActive(familyId, active) {
@@ -230,6 +254,7 @@ function listAll() {
       .all(f.id),
     planLabel: PLANS[f.plan]?.label ?? f.plan,
     seats: PLANS[f.plan]?.seats ?? 0,
+    expired: isExpired(f),
     used: seatsUsed(f.id),
     members: db
       .prepare(
@@ -335,17 +360,22 @@ function deleteSession(token) {
 function subscriptionFor(userId) {
   const row = db
     .prepare(
-      `SELECT m.id AS member_id, m.label, f.id AS family_id, f.name AS family, f.plan, f.active
+      `SELECT m.id AS member_id, m.label, f.id AS family_id, f.name AS family, f.plan, f.active, f.expires_at
        FROM members m JOIN families f ON f.id = m.family_id
        WHERE m.user_id = ? AND m.revoked = 0
        ORDER BY f.active DESC, m.id DESC LIMIT 1`
     )
     .get(userId);
   if (!row) return null;
+  const expired = isExpired(row);
   return {
-    active: !!row.active,
+    active: !!row.active && !expired,
+    expired,
+    expiresAt: row.expires_at || null,
     plan: row.plan,
     planLabel: PLANS[row.plan]?.label ?? row.plan,
+    price: PLANS[row.plan]?.price ?? null,
+    currency: CURRENCY,
     family: row.family,
     label: row.label,
   };
@@ -400,7 +430,7 @@ function ownedFamily(userId) {
     )
     .get(userId, userId);
   if (!fam) throw httpError(403, 'Solo el dueño del plan puede administrar a las personas');
-  if (!fam.active) throw httpError(403, 'El plan no está activo');
+  if (!fam.active || isExpired(fam)) throw httpError(403, 'El plan no está activo');
   return fam;
 }
 
@@ -461,11 +491,11 @@ function claimEmailInvite(user) {
   if (sub && sub.active) return;
   const inv = db
     .prepare(
-      `SELECT e.*, f.plan, f.active FROM email_invites e JOIN families f ON f.id = e.family_id
+      `SELECT e.*, f.plan, f.active, f.expires_at FROM email_invites e JOIN families f ON f.id = e.family_id
        WHERE e.email = ? ORDER BY e.id LIMIT 1`
     )
     .get(user.email);
-  if (!inv || !inv.active) return;
+  if (!inv || !inv.active || isExpired(inv)) return;
   const tx = db.transaction(() => {
     db.prepare('UPDATE members SET revoked = 1 WHERE user_id = ? AND revoked = 0').run(user.id);
     db.prepare(
@@ -512,6 +542,7 @@ function redeemForUser(userId, code, { deviceId, deviceName } = {}) {
 
     const fam = db.prepare('SELECT * FROM families WHERE id = ?').get(inv.family_id);
     if (!fam || !fam.active) throw httpError(403, 'El plan no está activo');
+    if (isExpired(fam)) throw httpError(403, 'El plan venció. Pide que lo renueven.');
 
     const members = db
       .prepare('SELECT COUNT(*) c FROM members WHERE family_id = ? AND revoked = 0')
@@ -575,6 +606,7 @@ function redeem({ code, deviceId, deviceName }) {
 
     const fam = db.prepare('SELECT * FROM families WHERE id = ?').get(inv.family_id);
     if (!fam || !fam.active) throw httpError(403, 'El plan no está activo');
+    if (isExpired(fam)) throw httpError(403, 'El plan venció. Pide que lo renueven.');
 
     const members = db
       .prepare('SELECT COUNT(*) c FROM members WHERE family_id = ? AND revoked = 0')
@@ -597,12 +629,12 @@ function verifyToken(token) {
   if (!token) return null;
   const row = db
     .prepare(
-      `SELECT m.id, m.label, m.revoked, f.name AS family, f.plan, f.active
+      `SELECT m.id, m.label, m.revoked, f.name AS family, f.plan, f.active, f.expires_at
        FROM members m JOIN families f ON f.id = m.family_id
        WHERE m.token_hash = ?`
     )
     .get(sha256(token));
-  if (!row || row.revoked || !row.active) return null;
+  if (!row || row.revoked || !row.active || isExpired(row)) return null;
   db.prepare('UPDATE members SET last_seen = ? WHERE id = ?').run(now(), row.id);
   return row;
 }
@@ -619,8 +651,16 @@ function setAdmin(email, isAdmin) {
   );
 }
 
+function publicPlans() {
+  return Object.entries(PLANS).map(([id, p]) => ({ id, ...p, currency: CURRENCY }));
+}
+
 module.exports = {
   PLANS,
+  CURRENCY,
+  publicPlans,
+  setExpiry,
+  renewFamily,
   db,
   httpError,
   prettyCode,

@@ -159,3 +159,5 @@ dialog form { display: flex; justify-content: flex-end; margin-top: 16px; }
 .gap-left { margin-left: 6px; }
 .gap-top { margin-top: 8px; }
 details summary { cursor: pointer; font-size: 14px; }
+.row input.days { flex: 0 0 90px; width: 90px; }
+.family-actions input[type=date] { padding: 5px 10px; font-size: 13px; }
