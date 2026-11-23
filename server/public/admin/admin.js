@@ -232,7 +232,7 @@ function renderFamily(f) {
       el(
         'div',
         { class: 'main' },
-        el('b', {}, m.label),
+        el('b', {}, m.label, f.owner_user_id && m.user_id === f.owner_user_id ? el('span', { class: 'badge muted gap-left' }, 'dueño') : null),
         el('span', {}, [m.user_email || m.device_name || 'Sin cuenta (versión anterior de la app)', `visto ${fmt(m.last_seen)}`].join(' · '))
       ),
       el(
@@ -273,6 +273,25 @@ function renderFamily(f) {
     )
   );
 
+  const emailItems = (f.emailInvites || []).map((e) =>
+    el(
+      'div',
+      { class: 'item' },
+      el('div', { class: 'main' }, el('b', {}, e.email), el('span', {}, `invitado por correo · ${fmt(e.created_at)}`)),
+      el(
+        'button',
+        {
+          class: 'btn small danger',
+          onclick: () => {
+            if (!confirm(`¿Cancelar la invitación a ${e.email}?`)) return;
+            act(() => api('DELETE', `/email-invites/${e.id}`), 'Invitación cancelada');
+          },
+        },
+        'Cancelar'
+      )
+    )
+  );
+
   const full = f.used.total >= f.seats;
   const inviteForm = el(
     'form',
@@ -303,13 +322,15 @@ function renderFamily(f) {
         'div',
         { class: 'family-title' },
         el('h3', {}, f.name, ' ', el('span', { class: `badge ${active ? 'on' : 'off'}` }, active ? 'Activo' : 'Desactivado')),
-        el('span', { class: 'meta' }, `#${f.id} · ${f.planLabel} · ${f.used.members}/${f.seats} miembros${f.used.pending ? ` · ${f.used.pending} invitación(es) pendiente(s)` : ''}`),
+        el('span', { class: 'meta' }, `#${f.id} · ${f.planLabel} · ${f.used.members}/${f.seats} miembros${f.used.pending ? ` · ${f.used.pending} invitación(es) pendiente(s)` : ''}${f.owner ? ` · dueño: ${f.owner.email}` : ''}`),
         el('div', { class: 'seats', 'aria-hidden': 'true' }, seats)
       ),
       el('div', { class: 'family-actions' }, planSelect, toggle)
     ),
     el('div', { class: 'list' }, el('h4', {}, 'Miembros'), memberItems.length ? memberItems : el('p', { class: 'empty' }, 'Nadie todavía.')),
-    inviteItems.length ? el('div', { class: 'list' }, el('h4', {}, 'Invitaciones pendientes'), inviteItems) : null,
+    inviteItems.length || emailItems.length
+      ? el('div', { class: 'list' }, el('h4', {}, 'Invitaciones pendientes'), inviteItems, emailItems)
+      : null,
     el(
       'div',
       { class: 'list' },

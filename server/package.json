@@ -1,5 +1,5 @@
 {
-  "name": "pego-access-server",
+  "name": "marea-access-server",
   "version": "1.0.0",
   "description": "Servidor de acceso (cuentas y planes por invitación) para Marea",
   "main": "server.js",

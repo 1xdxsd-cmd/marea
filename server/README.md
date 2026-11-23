@@ -3,7 +3,7 @@
 Controla quién puede usar la app:
 
 1. Cada persona **crea una cuenta** en la app (nombre, correo y contraseña) o inicia sesión.
-2. Dentro de la app, en **Cuenta → Suscripción**, pone el **código de invitación** (`PEGO-XXXX-XXXX`)
+2. Dentro de la app, en **Cuenta → Suscripción**, pone el **código de invitación** (`MAREA-XXXX-XXXX`)
    que le diste. Con eso su cuenta ocupa un cupo del plan y puede usar la app.
 3. Tú administras todo desde la **web de administración** (`/admin`): crear planes, cambiar de
    plan, generar códigos, cancelar invitaciones, revocar miembros y ver las cuentas.
@@ -26,11 +26,12 @@ npm install
 node server.js        # en Pterodactyl usa SERVER_PORT y escucha en 0.0.0.0
 ```
 
-Variables: `PORT` o `SERVER_PORT` (1753 por defecto), `HOST`, `PEGO_DB` (ruta del archivo SQLite).
+Variables: `PORT` o `SERVER_PORT` (1753 por defecto), `HOST`, `MAREA_DB` (ruta del archivo SQLite, `marea.db` por defecto).
 
-**Actualizar desde la versión anterior:** reemplaza `db.js`, `server.js`, `cli.js` y copia la carpeta
-`public/`. No borres `pego.db`: las tablas nuevas (`users`, `sessions`) se crean solas al arrancar y
-los planes, miembros e invitaciones que ya tienes se conservan.
+**Actualizar desde la versión anterior:** reemplaza `db.js`, `server.js`, `cli.js`, `package.json` y
+copia la carpeta `public/`. La base de datos ahora se llama `marea.db`; si quieres conservar la de
+la versión anterior, renómbrala a `marea.db` antes de arrancar (las tablas nuevas se crean solas).
+Los códigos nuevos empiezan con `MAREA-`.
 
 ### HTTPS
 
@@ -78,11 +79,11 @@ admin:grant <email> / admin:remove <email> Da o quita acceso a la web
 
 ## Conectar la app
 
-Compila el APK apuntando a tu servidor (`PEGO_ACCESS_URL`, ya configurado como secreto en GitHub
+Compila el APK apuntando a tu servidor (`MAREA_ACCESS_URL`, ya configurado como secreto en GitHub
 Actions):
 
 ```bash
-./gradlew assembleRelease -PPEGO_ACCESS_URL=https://pego.tudominio.com
+./gradlew assembleRelease -PMAREA_ACCESS_URL=https://marea.tudominio.com
 ```
 
 ## API

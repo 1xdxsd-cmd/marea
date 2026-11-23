@@ -53,11 +53,17 @@ const bearer = (req) => {
   return header.startsWith('Bearer ') ? header.slice(7) : '';
 };
 
-const meResponse = (user) => ({
-  ok: true,
-  user: d.publicUser(user),
-  subscription: d.subscriptionFor(user.id),
-});
+const meResponse = (user) => {
+  const subscription = d.subscriptionFor(user.id);
+  if (subscription) subscription.details = d.familyDetailsFor(user.id);
+  return { ok: true, user: d.publicUser(user), subscription };
+};
+
+const appUser = (req) => {
+  const user = d.sessionUser(bearer(req), 'app');
+  if (!user) throw d.httpError(401, 'Tu sesión se cerró. Vuelve a iniciar sesión.');
+  return user;
+};
 
 app.get('/healthz', (_req, res) => res.json({ ok: true }));
 
@@ -70,6 +76,7 @@ app.post(
     const { email, password, name, deviceId, deviceName, legacyToken } = req.body || {};
     const user = await d.registerUser({ email, password, name });
     d.claimLegacyMember(user.id, legacyToken);
+    d.claimEmailInvite(user);
     const token = d.createSession(user.id, 'app', { deviceId, deviceName });
     res.json({ ...meResponse(user), token });
   })
@@ -82,6 +89,7 @@ app.post(
     const { email, password, deviceId, deviceName, legacyToken } = req.body || {};
     const user = await d.authenticate(email, password);
     d.claimLegacyMember(user.id, legacyToken);
+    d.claimEmailInvite(user);
     const token = d.createSession(user.id, 'app', { deviceId, deviceName });
     res.json({ ...meResponse(user), token });
   })
@@ -125,8 +133,47 @@ app.post(
     const user = d.sessionUser(bearer(req), 'app');
     if (!user) return res.status(401).json({ error: 'Tu sesión se cerró. Vuelve a iniciar sesión.' });
     const { code, deviceId, deviceName } = req.body || {};
-    const subscription = d.redeemForUser(user.id, code, { deviceId, deviceName });
-    res.json({ ok: true, subscription });
+    d.redeemForUser(user.id, code, { deviceId, deviceName });
+    res.json(meResponse(user));
+  })
+);
+
+// Dúo / Familiar: el dueño del plan suma o quita personas por correo.
+app.post(
+  '/v1/family/members',
+  limitRedeem,
+  handle(async (req, res) => {
+    const user = appUser(req);
+    const r = d.addFamilyEmail(user.id, (req.body || {}).email);
+    res.json({ ...meResponse(user), added: r.added });
+  })
+);
+
+app.delete(
+  '/v1/family/members/:id',
+  handle(async (req, res) => {
+    const user = appUser(req);
+    d.removeFamilyMember(user.id, Number(req.params.id));
+    res.json(meResponse(user));
+  })
+);
+
+app.delete(
+  '/v1/family/pending/:id',
+  handle(async (req, res) => {
+    const user = appUser(req);
+    d.removeFamilyEmail(user.id, Number(req.params.id));
+    res.json(meResponse(user));
+  })
+);
+
+// Un solo dispositivo reproduciendo a la vez por cuenta.
+app.post(
+  '/v1/playback/heartbeat',
+  handle(async (req, res) => {
+    const user = appUser(req);
+    const { deviceId, claim } = req.body || {};
+    res.json(d.playbackHeartbeat(user.id, deviceId, !!claim));
   })
 );
 
@@ -307,6 +354,15 @@ admin.post(
     const { label, days } = req.body || {};
     const code = d.createInvite(Number(req.params.id), label, days ?? 7);
     res.json({ ok: true, code });
+  })
+);
+
+admin.delete(
+  '/email-invites/:id',
+  requireAdmin,
+  handle(async (req, res) => {
+    if (!d.deleteEmailInvite(Number(req.params.id))) throw d.httpError(404, 'Invitación no encontrada');
+    res.json({ ok: true });
   })
 );
 

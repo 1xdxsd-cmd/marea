@@ -6,21 +6,21 @@ plugins {
 }
 
 android {
-    namespace = "com.pego.music"
+    namespace = "com.marea.music"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.pego.music"
+        applicationId = "com.marea.music"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0-mvp"
 
-        // URL HTTPS de tu servidor de acceso (carpeta /server). Define PEGO_ACCESS_URL en
-        // gradle.properties, con -PPEGO_ACCESS_URL=... o como variable de entorno.
-        val accessUrl = (project.findProperty("PEGO_ACCESS_URL") as String?)
-            ?: System.getenv("PEGO_ACCESS_URL")
-            ?: "https://pego.example.com"
+        // URL HTTPS de tu servidor de acceso (carpeta /server). Define MAREA_ACCESS_URL en
+        // gradle.properties, con -PMAREA_ACCESS_URL=... o como variable de entorno.
+        val accessUrl = (project.findProperty("MAREA_ACCESS_URL") as String?)
+            ?: System.getenv("MAREA_ACCESS_URL")
+            ?: "https://marea.example.com"
         buildConfigField("String", "ACCESS_SERVER_URL", "\"${accessUrl.trimEnd('/')}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -28,12 +28,12 @@ android {
 
     signingConfigs {
         create("release") {
-            val ksPath = System.getenv("PEGO_KEYSTORE_PATH")
+            val ksPath = System.getenv("MAREA_KEYSTORE_PATH")
             if (!ksPath.isNullOrBlank()) {
                 storeFile = file(ksPath)
-                storePassword = System.getenv("PEGO_KEYSTORE_PASS")
-                keyAlias = System.getenv("PEGO_KEY_ALIAS") ?: "pego"
-                keyPassword = System.getenv("PEGO_KEY_PASS")
+                storePassword = System.getenv("MAREA_KEYSTORE_PASS")
+                keyAlias = System.getenv("MAREA_KEY_ALIAS") ?: "marea"
+                keyPassword = System.getenv("MAREA_KEY_PASS")
             }
         }
     }
@@ -42,7 +42,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            if (!System.getenv("PEGO_KEYSTORE_PATH").isNullOrBlank()) {
+            if (!System.getenv("MAREA_KEYSTORE_PATH").isNullOrBlank()) {
                 signingConfig = signingConfigs.getByName("release")
             }
             proguardFiles(

@@ -7,13 +7,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      PEGO_ACCESS_URL: ${{ secrets.PEGO_ACCESS_URL }}
+      MAREA_ACCESS_URL: ${{ secrets.MAREA_ACCESS_URL }}
 
     steps:
       - name: Verificar secreto
         run: |
-          if [ -z "$PEGO_ACCESS_URL" ]; then
-            echo "Falta el secreto PEGO_ACCESS_URL (Settings > Secrets and variables > Actions)"
+          if [ -z "$MAREA_ACCESS_URL" ]; then
+            echo "Falta el secreto MAREA_ACCESS_URL (Settings > Secrets and variables > Actions)"
             exit 1
           fi
 

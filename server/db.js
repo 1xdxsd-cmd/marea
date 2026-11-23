@@ -13,7 +13,7 @@ const PLANS = {
   family: { label: 'Familiar', seats: 6 },
 };
 
-const dbPath = process.env.PEGO_DB || path.join(__dirname, 'pego.db');
+const dbPath = process.env.MAREA_DB || path.join(__dirname, 'marea.db');
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
@@ -73,6 +73,29 @@ if (!memberCols.includes('user_id')) {
 }
 db.exec('CREATE INDEX IF NOT EXISTS members_user ON members(user_id)');
 
+// Migración: quien canjea el primer código de un plan Dúo/Familiar es su dueño y puede
+// sumar a otras personas por correo.
+const familyCols = db.prepare('PRAGMA table_info(families)').all().map((c) => c.name);
+if (!familyCols.includes('owner_user_id')) {
+  db.exec('ALTER TABLE families ADD COLUMN owner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+}
+// Un solo dispositivo reproduciendo a la vez por cuenta.
+const userCols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+if (!userCols.includes('active_device')) {
+  db.exec('ALTER TABLE users ADD COLUMN active_device TEXT');
+  db.exec('ALTER TABLE users ADD COLUMN active_at INTEGER');
+}
+db.exec(`
+CREATE TABLE IF NOT EXISTS email_invites (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  family_id INTEGER NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+  email TEXT NOT NULL COLLATE NOCASE,
+  invited_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at INTEGER NOT NULL,
+  UNIQUE (family_id, email)
+);
+`);
+
 const now = () => Date.now();
 const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
 const newToken = () => crypto.randomBytes(32).toString('base64url');
@@ -109,13 +132,13 @@ const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 function randomCode() {
   const pick = () => ALPHABET[crypto.randomInt(ALPHABET.length)];
   const block = () => Array.from({ length: 4 }, pick).join('');
-  return `PEGO-${block()}-${block()}`;
+  return `MAREA-${block()}-${block()}`;
 }
 function normalizeCode(raw) {
   return String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 const codeKey = (code) => normalizeCode(code);
-const prettyCode = (key) => key.replace(/^PEGO(.{4})(.{4})$/, 'PEGO-$1-$2');
+const prettyCode = (key) => key.replace(/^([A-Z]+)(.{4})(.{4})$/, '$1-$2-$3');
 
 // ---------- Planes (familias) ----------
 
@@ -123,12 +146,16 @@ function seatsUsed(familyId) {
   const members = db
     .prepare('SELECT COUNT(*) c FROM members WHERE family_id = ? AND revoked = 0')
     .get(familyId).c;
-  const pending = db
+  const pendingCodes = db
     .prepare(
       'SELECT COUNT(*) c FROM invites WHERE family_id = ? AND used_at IS NULL AND expires_at > ?'
     )
     .get(familyId, now()).c;
-  return { members, pending, total: members + pending };
+  const pendingEmails = db
+    .prepare('SELECT COUNT(*) c FROM email_invites WHERE family_id = ?')
+    .get(familyId).c;
+  const pending = pendingCodes + pendingEmails;
+  return { members, pending, pendingCodes, pendingEmails, total: members + pending };
 }
 
 function getFamily(familyId) {
@@ -187,10 +214,20 @@ function revokeMember(memberId) {
   return db.prepare('UPDATE members SET revoked = 1 WHERE id = ?').run(memberId).changes > 0;
 }
 
+function deleteEmailInvite(id) {
+  return db.prepare('DELETE FROM email_invites WHERE id = ?').run(id).changes > 0;
+}
+
 function listAll() {
   const fams = db.prepare('SELECT * FROM families ORDER BY id').all();
   return fams.map((f) => ({
     ...f,
+    owner: f.owner_user_id
+      ? db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(f.owner_user_id) || null
+      : null,
+    emailInvites: db
+      .prepare('SELECT id, email, created_at FROM email_invites WHERE family_id = ? ORDER BY id')
+      .all(f.id),
     planLabel: PLANS[f.plan]?.label ?? f.plan,
     seats: PLANS[f.plan]?.seats ?? 0,
     used: seatsUsed(f.id),
@@ -314,6 +351,150 @@ function subscriptionFor(userId) {
   };
 }
 
+// Detalle del plan para la sección Cuenta de la app: dueño, personas y correos pendientes.
+function familyDetailsFor(userId) {
+  const row = db
+    .prepare(
+      `SELECT f.* FROM members m JOIN families f ON f.id = m.family_id
+       WHERE m.user_id = ? AND m.revoked = 0
+       ORDER BY f.active DESC, m.id DESC LIMIT 1`
+    )
+    .get(userId);
+  if (!row) return null;
+  const owner = row.owner_user_id
+    ? db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(row.owner_user_id)
+    : null;
+  const isOwner = row.owner_user_id === userId;
+  const members = db
+    .prepare(
+      `SELECT m.id, m.label, u.id AS user_id, u.name, u.email
+       FROM members m LEFT JOIN users u ON u.id = m.user_id
+       WHERE m.family_id = ? AND m.revoked = 0 ORDER BY m.id`
+    )
+    .all(row.id)
+    .map((m) => ({
+      id: m.id,
+      name: m.name || m.label,
+      email: isOwner ? m.email || null : null,
+      isOwner: !!owner && m.user_id === owner.id,
+      isYou: m.user_id === userId,
+    }));
+  const used = seatsUsed(row.id);
+  return {
+    seats: PLANS[row.plan]?.seats ?? 0,
+    seatsFree: Math.max(0, (PLANS[row.plan]?.seats ?? 0) - used.total),
+    isOwner,
+    owner: owner ? { name: owner.name, email: isOwner ? owner.email : null } : null,
+    members,
+    pendingEmails: isOwner
+      ? db.prepare('SELECT id, email FROM email_invites WHERE family_id = ? ORDER BY id').all(row.id)
+      : [],
+  };
+}
+
+function ownedFamily(userId) {
+  const fam = db
+    .prepare(
+      `SELECT f.* FROM families f JOIN members m ON m.family_id = f.id
+       WHERE f.owner_user_id = ? AND m.user_id = ? AND m.revoked = 0 LIMIT 1`
+    )
+    .get(userId, userId);
+  if (!fam) throw httpError(403, 'Solo el dueño del plan puede administrar a las personas');
+  if (!fam.active) throw httpError(403, 'El plan no está activo');
+  return fam;
+}
+
+// El dueño suma a otra persona por correo. Si ya tiene cuenta entra al momento;
+// si no, queda pendiente hasta que se registre con ese correo.
+function addFamilyEmail(ownerId, rawEmail) {
+  const email = String(rawEmail || '').trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) throw httpError(400, 'Escribe un correo válido');
+  const tx = db.transaction(() => {
+    const fam = ownedFamily(ownerId);
+    const seats = PLANS[fam.plan].seats;
+    if (seats <= 1) throw httpError(409, `El plan ${PLANS[fam.plan].label} es solo para una persona`);
+    if (seatsUsed(fam.id).total >= seats) {
+      throw httpError(409, `Tu plan ${PLANS[fam.plan].label} ya no tiene cupos libres (${seats} en total)`);
+    }
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    if (user) {
+      if (user.id === ownerId) throw httpError(409, 'Ese es tu propio correo');
+      const sub = subscriptionFor(user.id);
+      if (sub && sub.active) throw httpError(409, 'Esa persona ya tiene un plan activo');
+      db.prepare('UPDATE members SET revoked = 1 WHERE user_id = ? AND revoked = 0').run(user.id);
+      db.prepare(
+        `INSERT INTO members (family_id, label, device_id, device_name, token_hash, created_at, last_seen, user_id)
+         VALUES (?, ?, 'cuenta', NULL, ?, ?, ?, ?)`
+      ).run(fam.id, user.name, sha256(newToken()), now(), now(), user.id);
+      return { added: true, name: user.name };
+    }
+    if (db.prepare('SELECT 1 FROM email_invites WHERE family_id = ? AND email = ?').get(fam.id, email)) {
+      throw httpError(409, 'Ese correo ya está invitado');
+    }
+    db.prepare(
+      'INSERT INTO email_invites (family_id, email, invited_by, created_at) VALUES (?, ?, ?, ?)'
+    ).run(fam.id, email, ownerId, now());
+    return { added: false };
+  });
+  return tx();
+}
+
+function removeFamilyMember(ownerId, memberId) {
+  const fam = ownedFamily(ownerId);
+  const m = db
+    .prepare('SELECT * FROM members WHERE id = ? AND family_id = ? AND revoked = 0')
+    .get(memberId, fam.id);
+  if (!m) throw httpError(404, 'Persona no encontrada');
+  if (m.user_id === ownerId) throw httpError(409, 'No puedes quitarte a ti mismo');
+  db.prepare('UPDATE members SET revoked = 1 WHERE id = ?').run(m.id);
+}
+
+function removeFamilyEmail(ownerId, inviteId) {
+  const fam = ownedFamily(ownerId);
+  const ok = db.prepare('DELETE FROM email_invites WHERE id = ? AND family_id = ?').run(inviteId, fam.id).changes > 0;
+  if (!ok) throw httpError(404, 'Invitación no encontrada');
+}
+
+// Al registrarse o iniciar sesión: si alguien le compartió su plan por correo, entra.
+function claimEmailInvite(user) {
+  const sub = subscriptionFor(user.id);
+  if (sub && sub.active) return;
+  const inv = db
+    .prepare(
+      `SELECT e.*, f.plan, f.active FROM email_invites e JOIN families f ON f.id = e.family_id
+       WHERE e.email = ? ORDER BY e.id LIMIT 1`
+    )
+    .get(user.email);
+  if (!inv || !inv.active) return;
+  const tx = db.transaction(() => {
+    db.prepare('UPDATE members SET revoked = 1 WHERE user_id = ? AND revoked = 0').run(user.id);
+    db.prepare(
+      `INSERT INTO members (family_id, label, device_id, device_name, token_hash, created_at, last_seen, user_id)
+       VALUES (?, ?, 'cuenta', NULL, ?, ?, ?, ?)`
+    ).run(inv.family_id, user.name, sha256(newToken()), now(), now(), user.id);
+    db.prepare('DELETE FROM email_invites WHERE id = ?').run(inv.id);
+  });
+  tx();
+}
+
+// ---------- Un dispositivo reproduciendo a la vez ----------
+
+const ACTIVE_TIMEOUT_MS = 2 * 60 * 1000;
+
+// claim = este dispositivo empezó a reproducir: pasa a ser el activo.
+// Sin claim (latido): sigue activo si nadie más tomó la cuenta desde entonces.
+function playbackHeartbeat(userId, deviceId, claim) {
+  deviceId = String(deviceId || '').slice(0, 80);
+  if (!deviceId) throw httpError(400, 'Dispositivo inválido');
+  const u = db.prepare('SELECT active_device, active_at FROM users WHERE id = ?').get(userId);
+  const stale = !u.active_at || now() - u.active_at > ACTIVE_TIMEOUT_MS;
+  if (claim || stale || u.active_device === deviceId) {
+    db.prepare('UPDATE users SET active_device = ?, active_at = ? WHERE id = ?').run(deviceId, now(), userId);
+    return { active: true };
+  }
+  return { active: false };
+}
+
 // Canjea un código de invitación para una cuenta ya iniciada.
 function redeemForUser(userId, code, { deviceId, deviceName } = {}) {
   const key = codeKey(code);
@@ -356,6 +537,10 @@ function redeemForUser(userId, code, { deviceId, deviceName } = {}) {
       userId
     );
     db.prepare('UPDATE invites SET used_at = ? WHERE code = ?').run(now(), key);
+    // El primero que canjea un código del plan queda como dueño.
+    if (!fam.owner_user_id) {
+      db.prepare('UPDATE families SET owner_user_id = ? WHERE id = ?').run(userId, fam.id);
+    }
   });
   tx();
   return subscriptionFor(userId);
@@ -370,6 +555,9 @@ function claimLegacyMember(userId, legacyToken) {
   if (!m) return;
   if (subscriptionFor(userId)?.active) return;
   db.prepare('UPDATE members SET user_id = ? WHERE id = ?').run(userId, m.id);
+  db.prepare(
+    'UPDATE families SET owner_user_id = ? WHERE owner_user_id IS NULL AND id = (SELECT family_id FROM members WHERE id = ?)'
+  ).run(userId, m.id);
 }
 
 // ---------- Compatibilidad con versiones anteriores de la app (solo código) ----------
@@ -454,6 +642,13 @@ module.exports = {
   subscriptionFor,
   redeemForUser,
   claimLegacyMember,
+  familyDetailsFor,
+  addFamilyEmail,
+  removeFamilyMember,
+  removeFamilyEmail,
+  claimEmailInvite,
+  deleteEmailInvite,
+  playbackHeartbeat,
   redeem,
   verifyToken,
   adminCount,
