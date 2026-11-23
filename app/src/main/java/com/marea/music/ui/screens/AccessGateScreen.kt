@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -58,7 +59,18 @@ import androidx.compose.foundation.layout.Row
 import com.marea.music.ui.theme.BricolageGrotesque
 import com.marea.music.ui.theme.MareaAccent
 import com.marea.music.ui.theme.MareaBg
+import com.marea.music.ui.components.Glass
+import com.marea.music.ui.components.GlowButton
+import com.marea.music.ui.components.NeonTag
+import com.marea.music.ui.components.glass
+import com.marea.music.ui.components.glassFieldColors
+import com.marea.music.ui.components.glow
 import com.marea.music.ui.theme.MareaCard
+import com.marea.music.ui.theme.MareaCyan
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import com.marea.music.data.access.hasAccess
 import com.marea.music.ui.theme.MareaOnAccent
 import com.marea.music.ui.theme.MareaText
 import com.marea.music.ui.theme.MareaTextSecondary
@@ -77,10 +89,10 @@ fun AccessGate(
     val state by access.state.collectAsState()
     when (val s = state) {
         AccessState.Checking -> Box(
-            modifier = Modifier.fillMaxSize().background(MareaBg),
+            modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            CircularProgressIndicator(color = MareaAccent)
+            CircularProgressIndicator(color = MareaCyan, strokeWidth = 2.5.dp)
         }
 
         is AccessState.SignedOut -> LoginScreen(access = access, state = s)
@@ -132,7 +144,6 @@ private fun LoginScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MareaBg)
             .systemBarsPadding()
             .imePadding()
             .verticalScroll(rememberScrollState())
@@ -143,15 +154,19 @@ private fun LoginScreen(
         Image(
             painter = painterResource(R.drawable.marea_logo),
             contentDescription = null,
-            modifier = Modifier.size(88.dp)
+            modifier = Modifier
+                .size(96.dp)
+                .glow(MareaAccent, spread = 30.dp, alpha = 0.45f)
         )
         Spacer(Modifier.height(16.dp))
         Text(
             text = "Marea",
-            color = MareaText,
-            fontSize = 44.sp,
-            fontFamily = BricolageGrotesque,
-            fontWeight = FontWeight.ExtraBold
+            style = androidx.compose.ui.text.TextStyle(
+                brush = Brush.linearGradient(listOf(MareaText, MareaCyan, MareaAccent)),
+                fontSize = 48.sp,
+                fontFamily = BricolageGrotesque,
+                fontWeight = FontWeight.ExtraBold
+            )
         )
         Spacer(Modifier.height(8.dp))
         Text(
@@ -178,7 +193,13 @@ private fun LoginScreen(
             ) {
                 Text("Reintentar", fontWeight = FontWeight.Bold)
             }
-        } else {
+        } else Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .glass(RoundedCornerShape(28.dp))
+                .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             if (registering) {
                 OutlinedTextField(
                     value = name,
@@ -191,7 +212,8 @@ private fun LoginScreen(
                         imeAction = ImeAction.Next
                     ),
                     keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = glassFieldColors()
                 )
                 Spacer(Modifier.height(12.dp))
             }
@@ -206,7 +228,8 @@ private fun LoginScreen(
                     imeAction = ImeAction.Next
                 ),
                 keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = glassFieldColors()
             )
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
@@ -224,7 +247,8 @@ private fun LoginScreen(
                     onNext = { focus.moveFocus(FocusDirection.Down) },
                     onDone = { submit() }
                 ),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = glassFieldColors()
             )
             if (registering) {
                 Spacer(Modifier.height(12.dp))
@@ -240,30 +264,18 @@ private fun LoginScreen(
                         imeAction = ImeAction.Done
                     ),
                     keyboardActions = KeyboardActions(onDone = { submit() }),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = glassFieldColors()
                 )
             }
             Spacer(Modifier.height(20.dp))
-            Button(
+            GlowButton(
+                text = if (registering) "Crear cuenta" else "Iniciar sesión",
                 onClick = ::submit,
                 enabled = canSubmit,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(26.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MareaAccent,
-                    contentColor = MareaOnAccent
-                )
-            ) {
-                if (loading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        strokeWidth = 2.5.dp,
-                        color = MareaOnAccent
-                    )
-                } else {
-                    Text(if (registering) "Crear cuenta" else "Iniciar sesión", fontWeight = FontWeight.Bold)
-                }
-            }
+                loading = loading,
+                modifier = Modifier.fillMaxWidth()
+            )
             Spacer(Modifier.height(8.dp))
             TextButton(
                 onClick = {
@@ -275,7 +287,7 @@ private fun LoginScreen(
             ) {
                 Text(
                     text = if (registering) "¿Ya tienes cuenta? Inicia sesión" else "¿No tienes cuenta? Regístrate",
-                    color = MareaAccent
+                    color = MareaCyan
                 )
             }
         }
@@ -342,9 +354,41 @@ fun SubscriptionScreen(
             fontFamily = BricolageGrotesque,
             fontWeight = FontWeight.ExtraBold
         )
-        Spacer(Modifier.height(4.dp))
-        Text(state.name, color = MareaText, style = MaterialTheme.typography.titleMedium)
-        Text(state.email, color = MareaTextSecondary, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(14.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .glass(RoundedCornerShape(24.dp))
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .glow(MareaAccent, spread = 8.dp, alpha = 0.4f)
+                    .clip(CircleShape)
+                    .background(Glass.accent, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = state.name.trim().take(1).uppercase().ifBlank { "M" },
+                    color = MareaOnAccent,
+                    fontSize = 24.sp,
+                    fontFamily = BricolageGrotesque,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    state.name,
+                    color = MareaText,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+                Text(state.email, color = MareaTextSecondary, style = MaterialTheme.typography.bodySmall)
+            }
+            if (state.hasAccess) NeonTag("Premium") else NeonTag("Gratis", color = MareaTextSecondary)
+        }
 
         Spacer(Modifier.height(28.dp))
         Text(
@@ -359,11 +403,27 @@ fun SubscriptionScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MareaCard, RoundedCornerShape(18.dp))
-                .padding(18.dp)
+                .then(
+                    if (sub != null && sub.active) Modifier.glow(MareaAccent, spread = 10.dp, alpha = 0.22f) else Modifier
+                )
+                .glass(RoundedCornerShape(26.dp))
+                .then(
+                    if (sub != null && sub.active) Modifier.background(Glass.selected, RoundedCornerShape(26.dp)) else Modifier
+                )
+                .padding(20.dp)
         ) {
             if (sub != null && sub.active) {
-                Text("Premium · Plan ${sub.planLabel}", color = MareaAccent, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                NeonTag("Premium activo")
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Plan ${sub.planLabel}",
+                    style = androidx.compose.ui.text.TextStyle(
+                        brush = Glass.accent,
+                        fontSize = 26.sp,
+                        fontFamily = BricolageGrotesque,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                )
                 Spacer(Modifier.height(4.dp))
                 Text(sub.family, color = MareaText, style = MaterialTheme.typography.bodyLarge)
                 sub.price?.let { price ->
@@ -395,9 +455,9 @@ fun SubscriptionScreen(
                     Spacer(Modifier.height(8.dp))
                 }
                 Text(
-                    "Con anuncios y hasta 6 saltos de canción por hora. Ingresa el código de " +
-                        "invitación de tu plan para pasarte a Premium: sin anuncios, saltos sin " +
-                        "límite y ecualizador.",
+                    "Con anuncios, hasta 6 saltos de canción por hora y sin descargas. Ingresa el " +
+                        "código de invitación de tu plan para pasarte a Premium: sin anuncios, saltos " +
+                        "sin límite, descargas para escuchar sin conexión y ecualizador.",
                     color = MareaTextSecondary,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -422,7 +482,8 @@ fun SubscriptionScreen(
                         imeAction = ImeAction.Done
                     ),
                     keyboardActions = KeyboardActions(onDone = { submit() }),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = glassFieldColors()
                 )
                 Spacer(Modifier.height(12.dp))
                 Button(
@@ -520,7 +581,7 @@ private fun FamilySection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MareaCard, RoundedCornerShape(18.dp))
+            .glass(RoundedCornerShape(24.dp))
             .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
         details.members.forEach { m ->
@@ -591,7 +652,8 @@ private fun FamilySection(
                 keyboardActions = KeyboardActions(onDone = {
                     if (email.isNotBlank()) run({ access.addFamilyEmail(email).also { if (it == null) email = "" } }, "Listo, ya puede disfrutar tu plan")
                 }),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = glassFieldColors()
             )
             Spacer(Modifier.height(10.dp))
             Button(
@@ -658,7 +720,7 @@ private fun PlansList(access: AccessRepository) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp)
-                .background(MareaBg, RoundedCornerShape(14.dp))
+                .glass(RoundedCornerShape(18.dp))
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -668,14 +730,22 @@ private fun PlansList(access: AccessRepository) {
                     text = when (plan.seats) {
                         1 -> "1 persona"
                         else -> "Hasta ${plan.seats} personas"
-                    } + " · sin anuncios · saltos ilimitados · ecualizador",
+                    } + " · sin anuncios · descargas · saltos ilimitados · ecualizador",
                     color = MareaTextSecondary,
                     style = MaterialTheme.typography.bodySmall
                 )
             }
             Spacer(Modifier.size(8.dp))
             Column(horizontalAlignment = Alignment.End) {
-                Text("$${plan.price}", color = MareaAccent, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
+                Text(
+                    "$${plan.price}",
+                    style = androidx.compose.ui.text.TextStyle(
+                        brush = Glass.accent,
+                        fontFamily = BricolageGrotesque,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 24.sp
+                    )
+                )
                 Text("${plan.currency}/mes", color = MareaTextSecondary, style = MaterialTheme.typography.labelSmall)
             }
         }

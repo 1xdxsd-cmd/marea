@@ -10,9 +10,9 @@ También puedes recibir actualizaciones automáticas en Android usando **Obtaini
 ## Características principales
 
 - **Reproductor completo:** reproducción en segundo plano (`MediaSessionService`), caché de streaming HTTP/2 (`OkHttpDataSource` + `SimpleCache` de 150 MB), modos secuencial, aleatorio y repetición (`OFF`, `ALL`, `ONE`), más letras vía LRCLIB.
-- **Descarga 1-Click y playlists:** descarga paralela por rangos HTTP en formato `.m4a` con cola en segundo plano (`WorkManager` + `Room`), cancelación/eliminación en cola e importación por enlace compatible (incluyendo *Compartir → Marea*).
-- **Portadas HD y validación PSNR:** enriquecimiento automático mediante APIs abiertas (iTunes Search, Deezer, MusicBrainz / Cover Art Archive) con filtro de calidad **PSNR >= 20 dB**, más editor manual desde galería o internet (`JAudiotagger`).
-- **Recortador de audio nativo:** recorte de intros/outros acelerado por hardware con **Jetpack Media3 `Transformer`**.
+- **Descarga 1-Click y playlists (Premium):** descarga paralela por rangos HTTP en formato `.m4a` con cola en segundo plano (`WorkManager` + `Room`), cancelación/eliminación en cola e importación por enlace compatible (incluyendo *Compartir → Marea*).
+- **Portadas HD y validación PSNR:** enriquecimiento automático mediante APIs abiertas (iTunes Search, Deezer, MusicBrainz / Cover Art Archive) con filtro de calidad **PSNR >= 20 dB**, escritas en el archivo con `JAudiotagger`.
+- **Diseño cristal:** superficies translúcidas, portada difuminada de fondo en el reproductor, brillos azules y letra sincronizada.
 - **Playlists y vista por artista:** creación/gestión de playlists locales, filtro de canciones originales en búsqueda, vista estricta de artista (incluyendo colaboraciones explícitas) y recomendaciones personalizadas basadas en tu biblioteca (ListenBrainz Labs + Deezer + grafo de canciones relacionadas).
 
 ## Stack Técnico

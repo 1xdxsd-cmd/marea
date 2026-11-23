@@ -19,7 +19,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AllInclusive
 import androidx.compose.material.icons.rounded.Clear
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Search
@@ -54,7 +57,18 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.marea.music.domain.model.TrackItem
 import com.marea.music.ui.SearchUiState
+import com.marea.music.ui.components.CoverArt
+import com.marea.music.ui.components.GlassCard
+import com.marea.music.ui.components.GlassChip
+import com.marea.music.ui.components.GlowButton
+import com.marea.music.ui.components.LocalIsPremium
+import com.marea.music.ui.components.NeonTag
 import com.marea.music.ui.components.TrackRow
+import com.marea.music.ui.components.glass
+import com.marea.music.ui.components.glassFieldColors
+import com.marea.music.ui.components.glow
+import com.marea.music.ui.theme.MareaCyan
+import com.marea.music.ui.theme.MareaText
 import com.marea.music.ui.theme.MareaCard
 import com.marea.music.ui.theme.MareaAccent
 import com.marea.music.ui.theme.MareaTextSecondary
@@ -71,8 +85,6 @@ fun SearchScreen(
     onDownloadSingle: (TrackItem) -> Unit,
     onArtistClick: (String) -> Unit,
     onAddToPlaylist: (TrackItem) -> Unit,
-    onEditCover: (TrackItem) -> Unit,
-    onTrimTrack: (TrackItem) -> Unit,
     onDeleteTrack: (TrackItem) -> Unit,
     onTogglePlaylistSelection: (String) -> Unit,
     onSelectAllPlaylist: (Boolean) -> Unit,
@@ -82,8 +94,21 @@ fun SearchScreen(
     val clipboard = LocalClipboardManager.current
     val keyboard = LocalSoftwareKeyboardController.current
 
+    val isPremium = LocalIsPremium.current
+
     Column(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 8.dp)) {
+            Text(
+                text = "Buscar",
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
+                color = MareaText
+            )
+            Text(
+                text = "Canciones, artistas o pega un link de YouTube",
+                style = MaterialTheme.typography.bodySmall,
+                color = MareaTextSecondary
+            )
+            Spacer(modifier = Modifier.height(14.dp))
             OutlinedTextField(
                 value = state.query,
                 onValueChange = onQueryChange,
@@ -116,36 +141,25 @@ fun SearchScreen(
                         onSubmitSearch(state.query)
                     }
                 ),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MareaCard,
-                    unfocusedContainerColor = MareaCard,
-                    focusedBorderColor = MareaAccent,
-                    unfocusedBorderColor = Color.Transparent
-                ),
-                shape = RoundedCornerShape(12.dp),
+                colors = glassFieldColors(),
+                shape = RoundedCornerShape(28.dp),
                 modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
+                GlassChip(
+                    text = "Solo originales",
                     selected = state.originalsOnly,
                     onClick = { onOriginalsFilterChange(true) },
-                    label = { Text("Solo Originales") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MareaAccent,
-                        selectedLabelColor = MareaOnAccent
-                    )
+                    icon = Icons.Rounded.Verified
                 )
-                FilterChip(
+                GlassChip(
+                    text = "Todo",
                     selected = !state.originalsOnly,
                     onClick = { onOriginalsFilterChange(false) },
-                    label = { Text("Todo") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MareaAccent,
-                        selectedLabelColor = MareaOnAccent
-                    )
+                    icon = Icons.Rounded.AllInclusive
                 )
             }
         }
@@ -155,15 +169,16 @@ fun SearchScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = MareaAccent)
+                CircularProgressIndicator(color = MareaCyan, strokeWidth = 2.5.dp)
             }
             return
         }
 
         state.error?.let { errorMsg ->
             Surface(
-                color = MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(18.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
@@ -178,15 +193,16 @@ fun SearchScreen(
 
         state.infoMessage?.let { msg ->
             Surface(
-                color = MareaAccent.copy(alpha = 0.18f),
-                shape = RoundedCornerShape(12.dp),
+                color = MareaAccent.copy(alpha = 0.14f),
+                shape = RoundedCornerShape(18.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MareaAccent.copy(alpha = 0.4f)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 6.dp)
             ) {
                 Text(
                     text = msg,
-                    color = MareaAccent,
+                    color = MareaCyan,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(14.dp)
                 )
@@ -204,23 +220,24 @@ fun SearchScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MareaCard)
+                            .glass(RoundedCornerShape(26.dp))
                             .padding(16.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (playlist.thumbnailUrl.isNotBlank()) {
-                                AsyncImage(
-                                    model = playlist.thumbnailUrl,
-                                    contentDescription = playlist.title,
-                                    contentScale = ContentScale.Crop,
+                                CoverArt(
+                                    url = playlist.thumbnailUrl,
                                     modifier = Modifier
-                                        .size(72.dp)
-                                        .clip(RoundedCornerShape(10.dp))
+                                        .size(76.dp)
+                                        .glow(MareaAccent, spread = 8.dp, alpha = 0.35f),
+                                    shape = RoundedCornerShape(18.dp),
+                                    requestSize = 300
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
                             }
                             Column(modifier = Modifier.weight(1f)) {
+                                NeonTag("Playlist")
+                                Spacer(Modifier.height(6.dp))
                                 Text(
                                     text = playlist.title,
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -228,7 +245,7 @@ fun SearchScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "${playlist.author} • ${playlist.tracks.size}",
+                                    text = "${playlist.author}  ·  ${playlist.tracks.size} canciones",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MareaTextSecondary
                                 )
@@ -240,26 +257,17 @@ fun SearchScreen(
                         val pendingTracks = playlist.tracks.filter { !it.isDownloaded }
                         val pendingSelectedCount = pendingTracks.count { it.id in state.selectedPlaylistIds }
 
-                        Button(
+                        GlowButton(
+                            text = when {
+                                pendingTracks.isEmpty() -> "Playlist descargada"
+                                !isPremium -> "Descargar con Premium"
+                                else -> "Descargar ($pendingSelectedCount)"
+                            },
+                            icon = if (isPremium) Icons.Rounded.Download else Icons.Rounded.Lock,
                             onClick = onDownloadSelectedPlaylist,
                             enabled = pendingSelectedCount > 0,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MareaAccent,
-                                contentColor = MareaOnAccent
-                            ),
                             modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Rounded.Download, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (pendingTracks.isEmpty()) {
-                                    "Playlist descargada"
-                                } else {
-                                    "Descargar ($pendingSelectedCount)"
-                                },
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        )
 
                         Spacer(modifier = Modifier.height(6.dp))
 
@@ -274,11 +282,11 @@ fun SearchScreen(
                             ) {
                                 Text(
                                     if (allSelected) "Deseleccionar" else "Seleccionar todas",
-                                    color = MareaAccent
+                                    color = MareaCyan
                                 )
                             }
-                            OutlinedButton(onClick = onClearPlaylist) {
-                                Text("Cerrar")
+                            TextButton(onClick = onClearPlaylist) {
+                                Text("Cerrar", color = MareaTextSecondary)
                             }
                         }
                     }
@@ -293,7 +301,11 @@ fun SearchScreen(
                             checked = track.isDownloaded || track.id in state.selectedPlaylistIds,
                             enabled = !track.isDownloaded,
                             onCheckedChange = { onTogglePlaylistSelection(track.id) },
-                            colors = CheckboxDefaults.colors(checkedColor = MareaAccent),
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MareaAccent,
+                                checkmarkColor = MareaOnAccent,
+                                uncheckedColor = MareaTextSecondary
+                            ),
                             modifier = Modifier.padding(start = 8.dp)
                         )
                         TrackRow(
@@ -303,8 +315,6 @@ fun SearchScreen(
                             onDownloadClick = { onDownloadSingle(track) },
                             onArtistClick = onArtistClick,
                             onAddToPlaylist = { onAddToPlaylist(track) },
-                            onEditCover = { onEditCover(track) },
-                            onTrimTrack = { onTrimTrack(track) },
                             onDeleteTrack = { onDeleteTrack(track) },
                             modifier = Modifier.weight(1f)
                         )
@@ -312,6 +322,31 @@ fun SearchScreen(
                 }
             }
         } else {
+            if (state.results.isEmpty() && state.error == null) {
+                GlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = MareaCyan,
+                        modifier = Modifier.glow(MareaAccent, spread = 10.dp, alpha = 0.4f)
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "Encuentra cualquier canción",
+                        color = MareaText,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        "Escribe el nombre de una canción o artista, o pega un link de YouTube o de una playlist.",
+                        color = MareaTextSecondary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 120.dp)
@@ -324,8 +359,6 @@ fun SearchScreen(
                         onDownloadClick = { onDownloadSingle(track) },
                         onArtistClick = onArtistClick,
                         onAddToPlaylist = { onAddToPlaylist(track) },
-                        onEditCover = { onEditCover(track) },
-                        onTrimTrack = { onTrimTrack(track) },
                         onDeleteTrack = { onDeleteTrack(track) }
                     )
                 }

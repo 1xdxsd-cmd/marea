@@ -1,12 +1,9 @@
 package com.marea.music.ui
 
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.marea.music.AppContainer
-import com.marea.music.core.image.CoverQualityResult
-import com.marea.music.core.image.ImageQualityEvaluator
 import com.marea.music.data.extractor.ParsedYouTubeInput
 import com.marea.music.data.history.ListeningHistory
 import com.marea.music.data.history.TopArtist
@@ -14,7 +11,6 @@ import com.marea.music.data.extractor.YouTubeUrlParser
 import com.marea.music.data.local.PlaylistEntity
 import com.marea.music.data.local.PlaylistTrackCrossRef
 import com.marea.music.data.local.TrackEntity
-import com.marea.music.data.metadata.CoverCandidate
 import com.marea.music.data.metadata.TitleCleaner
 import com.marea.music.domain.model.DownloadStatus
 import com.marea.music.domain.model.LocalPlaylist
@@ -36,10 +32,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.Request
-import java.io.File
-import java.io.FileOutputStream
 
 data class SearchUiState(
     val query: String = "",
@@ -50,19 +42,6 @@ data class SearchUiState(
     val playlistPreview: PlaylistPreview? = null,
     val selectedPlaylistIds: Set<String> = emptySet(),
     val infoMessage: String? = null
-)
-
-data class EvaluatedCoverCandidate(
-    val candidate: CoverCandidate,
-    val quality: CoverQualityResult?
-)
-
-data class CoverEditorUiState(
-    val isSearching: Boolean = false,
-    val isApplying: Boolean = false,
-    val candidates: List<EvaluatedCoverCandidate> = emptyList(),
-    val statusMessage: String? = null,
-    val errorMessage: String? = null
 )
 
 data class ArtistUiState(
@@ -86,9 +65,6 @@ class MareaViewModel(
 
     private val _isLoadingLyrics = MutableStateFlow(false)
     val isLoadingLyrics: StateFlow<Boolean> = _isLoadingLyrics.asStateFlow()
-
-    private val _coverEditorState = MutableStateFlow(CoverEditorUiState())
-    val coverEditorState: StateFlow<CoverEditorUiState> = _coverEditorState.asStateFlow()
 
     private val _rawRecommendations = MutableStateFlow<List<TrackItem>>(emptyList())
     private val _isLoadingRecommendations = MutableStateFlow(false)
@@ -556,6 +532,13 @@ class MareaViewModel(
         }
     }
 
+    /** Las descargas son solo para Premium; en el plan gratis se avisa y no se descarga. */
+    private fun canDownload(): Boolean {
+        if (container.playerController.uiState.value.isPremium) return true
+        _uiMessage.value = PREMIUM_DOWNLOAD_MESSAGE
+        return false
+    }
+
     fun downloadSingleTrack(track: TrackItem) {
         val current = allSavedTracksMap.value[track.id] ?: track
         if (current.downloadStatus == DownloadStatus.COMPLETED ||
@@ -565,6 +548,7 @@ class MareaViewModel(
         ) {
             return
         }
+        if (!canDownload()) return
 
         viewModelScope.launch {
             val resolved = if (current.sourceUrl.isBlank()) {
@@ -605,6 +589,7 @@ class MareaViewModel(
     fun downloadSelectedPlaylist() {
         val state = _searchState.value
         val preview = state.playlistPreview ?: return
+        if (!canDownload()) return
         val savedMap = allSavedTracksMap.value
         val selected = preview.tracks.filter {
             it.id in state.selectedPlaylistIds && savedMap[it.id]?.isDownloaded != true
@@ -767,211 +752,14 @@ class MareaViewModel(
         }
     }
 
-    // --- Cover Art Editor (Gallery or Internet + PSNR >= 20 dB) ---
-
-    fun resetCoverEditor() {
-        _coverEditorState.value = CoverEditorUiState()
-    }
-
-    fun searchCoversFromInternet(query: String) {
-        viewModelScope.launch {
-            _coverEditorState.update {
-                it.copy(isSearching = true, errorMessage = null, statusMessage = null)
-            }
-            val rawCandidates = container.metadataEnricher.searchCoverCandidates(query)
-            val evaluated = withContext(Dispatchers.IO) {
-                rawCandidates.map { candidate ->
-                    async {
-                        val temp = File(container.appContext.cacheDir, "eval_${candidate.imageUrl.hashCode()}.jpg")
-                        val ok = downloadFileTo(candidate.imageUrl, temp)
-                        val quality = if (ok) ImageQualityEvaluator.evaluateFile(temp) else null
-                        temp.delete()
-                        EvaluatedCoverCandidate(candidate, quality)
-                    }
-                }.awaitAll()
-            }
-                .filter { it.quality?.isAcceptable == true }
-
-            _coverEditorState.update {
-                it.copy(
-                    isSearching = false,
-                    candidates = evaluated,
-                    statusMessage = if (evaluated.isEmpty()) {
-                        "No se encontraron portadas con PSNR >= 20 dB"
-                    } else {
-                        "${evaluated.size} portadas HD (>= 20 dB) encontradas"
-                    }
-                )
-            }
-        }
-    }
-
-    fun applyCoverFromUrl(track: TrackItem, imageUrl: String) {
-        viewModelScope.launch {
-            _coverEditorState.update { it.copy(isApplying = true, errorMessage = null) }
-            try {
-                val tempCover = File(container.appContext.cacheDir, "new_cover_${track.id}.jpg")
-                val downloaded = withContext(Dispatchers.IO) { downloadFileTo(imageUrl, tempCover) }
-                if (!downloaded) {
-                    throw IllegalStateException("No se pudo descargar la imagen")
-                }
-                val quality = withContext(Dispatchers.IO) { ImageQualityEvaluator.evaluateFile(tempCover) }
-                if (quality == null || !quality.isAcceptable) {
-                    tempCover.delete()
-                    val dbText = quality?.let { "%.1f dB".format(it.psnrDb) } ?: "inválida"
-                    throw IllegalStateException("Imagen rechazada por baja calidad (PSNR: $dbText < 20 dB)")
-                }
-                applyCoverFileToTrack(track, tempCover)
-                tempCover.delete()
-                _coverEditorState.update {
-                    it.copy(
-                        isApplying = false,
-                        statusMessage = "Portada actualizada (PSNR: %.1f dB)".format(quality.psnrDb)
-                    )
-                }
-            } catch (e: Exception) {
-                _coverEditorState.update {
-                    it.copy(isApplying = false, errorMessage = e.message ?: "Error al aplicar portada")
-                }
-            }
-        }
-    }
-
-    fun applyCoverFromGalleryUri(track: TrackItem, uriString: String, bypassPsnrCheck: Boolean = false) {
-        viewModelScope.launch {
-            _coverEditorState.update { it.copy(isApplying = true, errorMessage = null) }
-            try {
-                val tempCover = container.audioTagger.copyUriToTempFile(uriString, "gallery_cover", "jpg")
-                    ?: throw IllegalStateException("No se pudo leer la imagen seleccionada")
-
-                val quality = withContext(Dispatchers.IO) { ImageQualityEvaluator.evaluateFile(tempCover) }
-                if (!bypassPsnrCheck && (quality == null || !quality.isAcceptable)) {
-                    tempCover.delete()
-                    val dbText = quality?.let { "%.1f dB".format(it.psnrDb) } ?: "desconocida"
-                    throw IllegalStateException("La imagen de galería tiene PSNR $dbText (< 20 dB) y se verá pixelada")
-                }
-
-                applyCoverFileToTrack(track, tempCover)
-                tempCover.delete()
-                val psnrText = quality?.let { " (PSNR: %.1f dB)".format(it.psnrDb) }.orEmpty()
-                _coverEditorState.update {
-                    it.copy(isApplying = false, statusMessage = "Portada de galería aplicada$psnrText")
-                }
-            } catch (e: Exception) {
-                _coverEditorState.update {
-                    it.copy(isApplying = false, errorMessage = e.message ?: "Error aplicando imagen")
-                }
-            }
-        }
-    }
-
-    private suspend fun applyCoverFileToTrack(track: TrackItem, coverFile: File) {
-        val sourceUri = track.localUri?.takeIf { it.isNotBlank() }
-            ?: track.localFilePath?.let { "file://$it" }
-            ?: throw IllegalStateException("Solo se puede editar la portada de canciones descargadas")
-
-        val tempAudio = container.audioTagger.copyUriToTempFile(sourceUri, "retag_${track.id}", "m4a")
-            ?: throw IllegalStateException("No se pudo acceder al archivo de audio")
-
-        try {
-            val (saved, persistedCoverUri) = container.audioTagger.retagAndReplaceAudio(
-                track = track,
-                sourceAudioFile = tempAudio,
-                newCoverFile = coverFile
-            )
-            val newCoverUrl = persistedCoverUri ?: track.bestCoverUrl
-            withContext(Dispatchers.IO) {
-                dao.updateTrackCover(
-                    trackId = track.id,
-                    hdCoverUrl = newCoverUrl,
-                    localUri = saved.localUri,
-                    localFilePath = saved.localFilePath
-                )
-            }
-            val updated = track.copy(
-                hdCoverUrl = newCoverUrl,
-                localUri = saved.localUri,
-                localFilePath = saved.localFilePath
-            )
-            container.playerController.refreshTrackMetadata(updated, replayAudio = false)
-            _uiMessage.value = "Portada actualizada"
-        } finally {
-            tempAudio.delete()
-        }
-    }
-
-    // --- Audio Trimmer (Remove Intro / Outro via Media3 Transformer) ---
-
-    fun trimDownloadedTrack(
-        track: TrackItem,
-        startMs: Long,
-        endMs: Long,
-        onComplete: (Boolean, String?) -> Unit
-    ) {
-        viewModelScope.launch {
-            try {
-                val inputUri = track.localUri?.takeIf { it.isNotBlank() }?.let(Uri::parse)
-                    ?: track.localFilePath?.let { Uri.fromFile(File(it)) }
-                    ?: throw IllegalStateException("Archivo local no disponible")
-
-                val trimmedOut = File(container.appContext.cacheDir, "trimmed_${track.id}.m4a")
-                container.audioTrimmer.trimAudio(
-                    inputUri = inputUri,
-                    startMs = startMs,
-                    endMs = endMs,
-                    outputFile = trimmedOut
-                )
-
-                val (saved, _) = container.audioTagger.retagAndReplaceAudio(
-                    track = track,
-                    sourceAudioFile = trimmedOut,
-                    newCoverFile = null
-                )
-                trimmedOut.delete()
-
-                val newDurationSeconds = ((endMs - startMs) / 1000L).coerceAtLeast(1L)
-                withContext(Dispatchers.IO) {
-                    dao.updateTrackTrimmed(
-                        trackId = track.id,
-                        durationSeconds = newDurationSeconds,
-                        localUri = saved.localUri,
-                        localFilePath = saved.localFilePath
-                    )
-                }
-
-                val updatedTrack = track.copy(
-                    durationSeconds = newDurationSeconds,
-                    localUri = saved.localUri,
-                    localFilePath = saved.localFilePath
-                )
-                container.playerController.refreshTrackMetadata(updatedTrack, replayAudio = true)
-                _uiMessage.value = "Audio recortado (${newDurationSeconds}s)"
-                onComplete(true, null)
-            } catch (e: Exception) {
-                onComplete(false, e.message ?: "Error al recortar el audio")
-            }
-        }
-    }
-
     fun clearUiMessage() {
         _uiMessage.value = null
     }
 
-    private fun downloadFileTo(url: String, dest: File): Boolean {
-        return runCatching {
-            val req = Request.Builder().url(url).get().build()
-            container.httpClient.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return@runCatching false
-                val body = resp.body ?: return@runCatching false
-                body.byteStream().use { input ->
-                    FileOutputStream(dest).use { out -> input.copyTo(out) }
-                }
-                dest.exists() && dest.length() > 0L
-            }
-        }.getOrDefault(false)
-    }
-
     companion object {
+        const val PREMIUM_DOWNLOAD_MESSAGE =
+            "Las descargas son de Premium. Activa tu plan en Cuenta para escuchar sin conexión."
+
         fun factory(container: AppContainer): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")

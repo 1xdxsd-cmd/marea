@@ -1,6 +1,16 @@
 package com.marea.music.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.Color
+import com.marea.music.ui.theme.MareaCyan
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,7 +60,16 @@ fun EqualizerSheet(onDismiss: () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MareaBg
+        containerColor = Color(0xFF0E1C27),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = {
+            Box(
+                Modifier
+                    .padding(vertical = 10.dp)
+                    .size(width = 40.dp, height = 4.dp)
+                    .background(Glass.accentHorizontal, RoundedCornerShape(2.dp))
+            )
+        }
     ) {
         Column(
             modifier = Modifier
@@ -64,20 +83,33 @@ fun EqualizerSheet(onDismiss: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Ecualizador",
-                    color = MareaText,
-                    fontSize = 24.sp,
-                    fontFamily = BricolageGrotesque,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Rounded.GraphicEq,
+                        contentDescription = null,
+                        tint = MareaCyan,
+                        modifier = Modifier.glow(MareaAccent, spread = 8.dp, alpha = 0.45f)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "Ecualizador",
+                        color = MareaText,
+                        fontSize = 24.sp,
+                        fontFamily = BricolageGrotesque,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    NeonTag("Premium")
+                }
                 if (state.premium && state.available) {
                     Switch(
                         checked = state.enabled,
                         onCheckedChange = EqualizerManager::setEnabled,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = MareaOnAccent,
-                            checkedTrackColor = MareaAccent
+                            checkedTrackColor = MareaAccent,
+                            uncheckedTrackColor = Color.White.copy(alpha = 0.08f),
+                            uncheckedBorderColor = Color.White.copy(alpha = 0.2f)
                         )
                     )
                 }
@@ -85,16 +117,18 @@ fun EqualizerSheet(onDismiss: () -> Unit) {
             Spacer(Modifier.height(12.dp))
 
             when {
-                !state.premium -> {
+                !state.premium -> GlassCard(modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Rounded.Lock, contentDescription = null, tint = MareaCyan)
+                    Spacer(Modifier.height(8.dp))
                     Text(
                         "El ecualizador es parte de Premium.",
                         color = MareaText,
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "Activa tu código de invitación en Cuenta → Suscripción para usarlo, " +
-                            "escuchar sin anuncios y saltar canciones sin límite.",
+                        "Activa tu código en Cuenta para usarlo, escuchar sin anuncios, " +
+                            "descargar canciones y saltar sin límite.",
                         color = MareaTextSecondary,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -114,16 +148,13 @@ fun EqualizerSheet(onDismiss: () -> Unit) {
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             state.presets.forEachIndexed { index, name ->
-                                AssistChip(
+                                GlassChip(
+                                    text = name,
+                                    selected = false,
                                     onClick = {
                                         if (!state.enabled) EqualizerManager.setEnabled(true)
                                         EqualizerManager.usePreset(index)
-                                    },
-                                    label = { Text(name) },
-                                    colors = AssistChipDefaults.assistChipColors(
-                                        containerColor = MareaCard,
-                                        labelColor = MareaText
-                                    )
+                                    }
                                 )
                             }
                         }
@@ -147,9 +178,9 @@ fun EqualizerSheet(onDismiss: () -> Unit) {
                                 valueRange = state.minLevel.toFloat()..state.maxLevel.toFloat(),
                                 modifier = Modifier.weight(1f),
                                 colors = SliderDefaults.colors(
-                                    thumbColor = MareaAccent,
+                                    thumbColor = MareaCyan,
                                     activeTrackColor = MareaAccent,
-                                    inactiveTrackColor = MareaCard
+                                    inactiveTrackColor = Color.White.copy(alpha = 0.10f)
                                 )
                             )
                             Text(
@@ -162,7 +193,7 @@ fun EqualizerSheet(onDismiss: () -> Unit) {
                     }
 
                     TextButton(onClick = EqualizerManager::reset) {
-                        Text("Restablecer", color = MareaAccent)
+                        Text("Restablecer", color = MareaCyan, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

@@ -5,7 +5,6 @@ import com.marea.music.core.network.OkHttpDownloader
 import com.marea.music.data.access.AccessMonitor
 import com.marea.music.data.access.AccessRepository
 import com.marea.music.data.history.ListeningHistory
-import com.marea.music.data.audio.AudioTrimmer
 import com.marea.music.data.download.DownloadOrchestrator
 import com.marea.music.data.extractor.YouTubeExtractorRepository
 import com.marea.music.data.local.MareaDatabase
@@ -26,7 +25,6 @@ class AppContainer(context: Context) {
     val lyricsRepository = LyricsRepository(httpClient)
     val recommendationEngine = RecommendationEngine(httpClient, extractorRepo)
     val audioTagger = AudioTagger(appContext)
-    val audioTrimmer = AudioTrimmer(appContext)
     val downloadOrchestrator = DownloadOrchestrator(appContext, database.mareaDao())
     val listeningHistory = ListeningHistory(appContext)
     val playerController = PlayerController(appContext, extractorRepo, listeningHistory)

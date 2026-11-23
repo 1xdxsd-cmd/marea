@@ -10,7 +10,34 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Snackbar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.marea.music.ui.components.Glass
+import com.marea.music.ui.components.LocalIsPremium
+import com.marea.music.ui.components.MareaBackdrop
+import com.marea.music.ui.components.glow
+import com.marea.music.ui.theme.MareaAccent
+import com.marea.music.ui.theme.MareaCyan
+import com.marea.music.ui.theme.MareaText
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -20,9 +47,6 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -47,18 +71,13 @@ import com.marea.music.ui.components.AddToPlaylistDialog
 import com.marea.music.ui.components.ArtistSheet
 import com.marea.music.ui.components.CreatePlaylistDialog
 import com.marea.music.ui.components.EqualizerSheet
-import com.marea.music.ui.components.EditCoverDialog
 import com.marea.music.ui.components.FullPlayerSheet
 import com.marea.music.ui.components.MiniPlayer
-import com.marea.music.ui.components.TrimAudioDialog
 import com.marea.music.ui.screens.AccessGate
 import com.marea.music.ui.screens.HomeScreen
 import com.marea.music.ui.screens.LibraryScreen
 import com.marea.music.ui.screens.SearchScreen
 import com.marea.music.ui.screens.SubscriptionScreen
-import com.marea.music.ui.theme.MareaBg
-import com.marea.music.ui.theme.MareaAccent
-import com.marea.music.ui.theme.MareaSurface
 import com.marea.music.ui.theme.MareaTextSecondary
 import com.marea.music.ui.theme.MareaTheme
 import kotlinx.coroutines.launch
@@ -91,14 +110,13 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MareaTheme {
+                MareaBackdrop {
                 AccessGate(access = container.accessRepository) {
                     var selectedTab by remember {
                         mutableIntStateOf(if (initialSharedUrl != null) 1 else 0)
                     }
                     var showFullPlayer by remember { mutableStateOf(false) }
                     var trackForPlaylist by remember { mutableStateOf<TrackItem?>(null) }
-                    var trackForTrim by remember { mutableStateOf<TrackItem?>(null) }
-                    var trackForCover by remember { mutableStateOf<TrackItem?>(null) }
                     var showCreatePlaylist by remember { mutableStateOf(false) }
                     var showEqualizer by remember { mutableStateOf(false) }
 
@@ -115,7 +133,6 @@ class MainActivity : ComponentActivity() {
                     val artistState by viewModel.artistState.collectAsState()
                     val lyrics by viewModel.lyricsState.collectAsState()
                     val isLoadingLyrics by viewModel.isLoadingLyrics.collectAsState()
-                    val coverEditorState by viewModel.coverEditorState.collectAsState()
                     val uiMessage by viewModel.uiMessage.collectAsState()
                     val accessState by container.accessRepository.state.collectAsState()
                     val topTracks by viewModel.topTracks.collectAsState()
@@ -143,53 +160,33 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    CompositionLocalProvider(LocalIsPremium provides playbackState.isPremium) {
                     Scaffold(
-                        containerColor = MareaBg,
-                        snackbarHost = { SnackbarHost(snackbarHostState) },
+                        containerColor = Color.Transparent,
+                        contentColor = MareaText,
+                        snackbarHost = {
+                            SnackbarHost(snackbarHostState) { data ->
+                                Snackbar(
+                                    snackbarData = data,
+                                    shape = RoundedCornerShape(18.dp),
+                                    containerColor = Color(0xF2132636),
+                                    contentColor = MareaText,
+                                    actionColor = MareaCyan,
+                                    modifier = Modifier.border(1.dp, Glass.border, RoundedCornerShape(18.dp))
+                                )
+                            }
+                        },
                         bottomBar = {
-                            Column {
+                            Column(modifier = Modifier.navigationBarsPadding().padding(bottom = 8.dp)) {
                                 MiniPlayer(
                                     playbackState = playbackState,
                                     onTogglePlayPause = viewModel::togglePlayPause,
                                     onExpand = { showFullPlayer = true }
                                 )
-                                NavigationBar(containerColor = MareaSurface) {
-                                    val navColors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = MareaAccent,
-                                        selectedTextColor = MareaAccent,
-                                        unselectedIconColor = MareaTextSecondary,
-                                        unselectedTextColor = MareaTextSecondary,
-                                        indicatorColor = Color.Transparent
-                                    )
-                                    NavigationBarItem(
-                                        selected = selectedTab == 0,
-                                        onClick = { selectedTab = 0 },
-                                        icon = { Icon(Icons.Rounded.Home, contentDescription = "Inicio") },
-                                        label = { Text("Inicio") },
-                                        colors = navColors
-                                    )
-                                    NavigationBarItem(
-                                        selected = selectedTab == 1,
-                                        onClick = { selectedTab = 1 },
-                                        icon = { Icon(Icons.Rounded.Search, contentDescription = "Buscar") },
-                                        label = { Text("Buscar") },
-                                        colors = navColors
-                                    )
-                                    NavigationBarItem(
-                                        selected = selectedTab == 2,
-                                        onClick = { selectedTab = 2 },
-                                        icon = { Icon(Icons.Rounded.LibraryMusic, contentDescription = "Biblioteca") },
-                                        label = { Text("Biblioteca") },
-                                        colors = navColors
-                                    )
-                                    NavigationBarItem(
-                                        selected = selectedTab == 3,
-                                        onClick = { selectedTab = 3 },
-                                        icon = { Icon(Icons.Rounded.AccountCircle, contentDescription = "Cuenta") },
-                                        label = { Text("Cuenta") },
-                                        colors = navColors
-                                    )
-                                }
+                                GlassNavBar(
+                                    selected = selectedTab,
+                                    onSelect = { selectedTab = it }
+                                )
                             }
                         }
                     ) { innerPadding ->
@@ -231,11 +228,6 @@ class MainActivity : ComponentActivity() {
                                     onDownloadSingle = viewModel::downloadSingleTrack,
                                     onArtistClick = viewModel::openArtistPage,
                                     onAddToPlaylist = { trackForPlaylist = it },
-                                    onEditCover = {
-                                        viewModel.resetCoverEditor()
-                                        trackForCover = it
-                                    },
-                                    onTrimTrack = { trackForTrim = it },
                                     onDeleteTrack = { viewModel.deleteDownloadedTrack(it.id) },
                                     onTogglePlaylistSelection = viewModel::togglePlaylistSelection,
                                     onSelectAllPlaylist = viewModel::selectAllPlaylistTracks,
@@ -261,11 +253,6 @@ class MainActivity : ComponentActivity() {
                                     onCancelQueueTrack = { viewModel.cancelOrRemoveQueuedDownload(it.id) },
                                     onArtistClick = viewModel::openArtistPage,
                                     onAddToPlaylist = { trackForPlaylist = it },
-                                    onEditCover = {
-                                        viewModel.resetCoverEditor()
-                                        trackForCover = it
-                                    },
-                                    onTrimTrack = { trackForTrim = it },
                                     onDeleteTrack = { viewModel.deleteDownloadedTrack(it.id) },
                                     onRemoveTrackFromPlaylist = viewModel::removeTrackFromPlaylist,
                                     onDeletePlaylist = viewModel::deletePlaylist,
@@ -298,11 +285,6 @@ class MainActivity : ComponentActivity() {
                             onCycleRepeatMode = viewModel::cycleRepeatMode,
                             onDownloadClick = viewModel::downloadSingleTrack,
                             onAddToPlaylist = { trackForPlaylist = it },
-                            onEditCover = {
-                                viewModel.resetCoverEditor()
-                                trackForCover = it
-                            },
-                            onTrimTrack = { trackForTrim = it },
                             onArtistClick = { artist ->
                                 showFullPlayer = false
                                 viewModel.openArtistPage(artist)
@@ -331,11 +313,6 @@ class MainActivity : ComponentActivity() {
                             },
                             onDownloadTrack = viewModel::downloadSingleTrack,
                             onAddToPlaylist = { trackForPlaylist = it },
-                            onEditCover = {
-                                viewModel.resetCoverEditor()
-                                trackForCover = it
-                            },
-                            onTrimTrack = { trackForTrim = it },
                             onDeleteTrack = { viewModel.deleteDownloadedTrack(it.id) }
                         )
                     }
@@ -356,29 +333,8 @@ class MainActivity : ComponentActivity() {
                             onCreate = { name -> viewModel.createPlaylist(name, null) }
                         )
                     }
-
-                    trackForTrim?.let { target ->
-                        val syncedTarget = savedTracksMap[target.id] ?: target
-                        TrimAudioDialog(
-                            track = syncedTarget,
-                            onDismiss = { trackForTrim = null },
-                            onConfirmTrim = { startMs, endMs, onDone ->
-                                viewModel.trimDownloadedTrack(syncedTarget, startMs, endMs, onDone)
-                            }
-                        )
                     }
-
-                    trackForCover?.let { target ->
-                        val syncedTarget = savedTracksMap[target.id] ?: target
-                        EditCoverDialog(
-                            track = syncedTarget,
-                            state = coverEditorState,
-                            onDismiss = { trackForCover = null },
-                            onSearchInternet = { q -> viewModel.searchCoversFromInternet(q) },
-                            onApplyUrl = { url -> viewModel.applyCoverFromUrl(syncedTarget, url) },
-                            onApplyGalleryUri = { uri -> viewModel.applyCoverFromGalleryUri(syncedTarget, uri) }
-                        )
-                    }
+                }
                 }
             }
         }
@@ -415,6 +371,65 @@ class MainActivity : ComponentActivity() {
             ) == PackageManager.PERMISSION_GRANTED
             if (!granted) {
                 requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+}
+
+private data class NavDestination(val label: String, val icon: ImageVector)
+
+private val NAV_DESTINATIONS = listOf(
+    NavDestination("Inicio", Icons.Rounded.Home),
+    NavDestination("Buscar", Icons.Rounded.Search),
+    NavDestination("Biblioteca", Icons.Rounded.LibraryMusic),
+    NavDestination("Cuenta", Icons.Rounded.AccountCircle)
+)
+
+/** Barra de navegación flotante de cristal; la pestaña activa se ilumina. */
+@Composable
+private fun GlassNavBar(selected: Int, onSelect: (Int) -> Unit) {
+    val shape = RoundedCornerShape(28.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .clip(shape)
+            .background(Glass.fillStrong, shape)
+            .border(1.dp, Glass.border, shape)
+            .padding(horizontal = 6.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        NAV_DESTINATIONS.forEachIndexed { index, dest ->
+            val isSelected = index == selected
+            val itemShape = RoundedCornerShape(22.dp)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(itemShape)
+                    .then(
+                        if (isSelected) Modifier.background(Glass.selected, itemShape) else Modifier
+                    )
+                    .clickable { onSelect(index) }
+                    .padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector = dest.icon,
+                    contentDescription = dest.label,
+                    tint = if (isSelected) MareaCyan else MareaTextSecondary,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .then(if (isSelected) Modifier.glow(MareaAccent, spread = 8.dp, alpha = 0.45f) else Modifier)
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = dest.label,
+                    color = if (isSelected) MareaText else MareaTextSecondary,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    )
+                )
             }
         }
     }

@@ -1,7 +1,10 @@
 package com.marea.music.ui.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,7 +21,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.Downloading
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Shuffle
@@ -51,7 +59,18 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.marea.music.domain.model.LocalPlaylist
 import com.marea.music.domain.model.TrackItem
+import com.marea.music.ui.components.CoverArt
+import com.marea.music.ui.components.GlassCard
+import com.marea.music.ui.components.GlassChip
+import com.marea.music.ui.components.GlassIconButton
+import com.marea.music.ui.components.GlowButton
+import com.marea.music.ui.components.LocalIsPremium
+import com.marea.music.ui.components.NeonTag
 import com.marea.music.ui.components.TrackRow
+import com.marea.music.ui.components.glass
+import com.marea.music.ui.components.glow
+import com.marea.music.ui.theme.MareaCyan
+import com.marea.music.ui.theme.MareaText
 import com.marea.music.ui.theme.MareaAccent
 import com.marea.music.ui.theme.MareaTextSecondary
 import com.marea.music.ui.theme.MareaOnAccent
@@ -68,8 +87,6 @@ fun LibraryScreen(
     onCancelQueueTrack: (TrackItem) -> Unit,
     onArtistClick: (String) -> Unit,
     onAddToPlaylist: (TrackItem) -> Unit,
-    onEditCover: (TrackItem) -> Unit,
-    onTrimTrack: (TrackItem) -> Unit,
     onDeleteTrack: (TrackItem) -> Unit,
     onRemoveTrackFromPlaylist: (Long, String) -> Unit,
     onDeletePlaylist: (Long) -> Unit,
@@ -84,52 +101,75 @@ fun LibraryScreen(
 
     if (currentOpened != null) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Row(
+            val openedCover = currentOpened.coverUrl.ifBlank {
+                currentOpened.tracks.firstOrNull { it.bestCoverUrl.isNotBlank() }?.bestCoverUrl.orEmpty()
+            }
+            GlassCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+                shape = RoundedCornerShape(28.dp),
+                contentPadding = 16.dp
             ) {
-                IconButton(onClick = { openedPlaylist = null }) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Volver")
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = currentOpened.name,
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                GlassIconButton(
+                    icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Volver",
+                    onClick = { openedPlaylist = null },
+                    size = 38.dp,
+                    iconSize = 20.dp
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CoverArt(
+                        url = openedCover,
+                        modifier = Modifier
+                            .size(96.dp)
+                            .glow(MareaAccent, spread = 12.dp, alpha = 0.35f),
+                        shape = RoundedCornerShape(22.dp),
+                        requestSize = 360,
+                        fallback = Icons.AutoMirrored.Rounded.PlaylistPlay
                     )
-                    Text(
-                        text = "${currentOpened.tracks.size} canciones",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MareaTextSecondary
-                    )
-                }
-                if (currentOpened.tracks.isNotEmpty()) {
-                    IconButton(onClick = { onPlayShuffled(currentOpened.tracks) }) {
-                        Icon(
-                            Icons.Rounded.Shuffle,
-                            contentDescription = "Aleatorio",
-                            tint = MareaAccent
+                    Spacer(Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        NeonTag("Playlist")
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = currentOpened.name,
+                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                            color = MareaText,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = songCount(currentOpened.tracks.size),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MareaTextSecondary
                         )
                     }
-                    Button(
-                        onClick = {
-                            onPlayTrack(currentOpened.tracks.first(), currentOpened.tracks)
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MareaAccent,
-                            contentColor = MareaOnAccent
+                }
+                if (currentOpened.tracks.isNotEmpty()) {
+                    Spacer(Modifier.height(14.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        GlowButton(
+                            text = "Reproducir",
+                            icon = Icons.Rounded.PlayArrow,
+                            onClick = { onPlayTrack(currentOpened.tracks.first(), currentOpened.tracks) },
+                            modifier = Modifier.weight(1f)
                         )
-                    ) {
-                        Text("Play", fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(10.dp))
+                        GlassIconButton(
+                            icon = Icons.Rounded.Shuffle,
+                            contentDescription = "Aleatorio",
+                            onClick = { onPlayShuffled(currentOpened.tracks) },
+                            size = 52.dp,
+                            tint = MareaCyan
+                        )
                     }
                 }
             }
 
             if (currentOpened.tracks.isEmpty()) {
-                EmptyState("Playlist vacía")
+                EmptyState("Esta playlist está vacía. Agrega canciones desde el menú ⋮ de cualquier canción.")
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -143,8 +183,6 @@ fun LibraryScreen(
                             onDownloadClick = { onRetryDownload(track) },
                             onArtistClick = onArtistClick,
                             onAddToPlaylist = { onAddToPlaylist(track) },
-                            onEditCover = { onEditCover(track) },
-                            onTrimTrack = { onTrimTrack(track) },
                             onRemoveFromPlaylist = {
                                 onRemoveTrackFromPlaylist(currentOpened.id, track.id)
                             },
@@ -158,26 +196,33 @@ fun LibraryScreen(
     }
 
     val uriHandler = LocalUriHandler.current
+    val isPremium = LocalIsPremium.current
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 8.dp, top = 16.dp, bottom = 8.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Tu Biblioteca",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier.weight(1f)
-            )
-            IconButton(onClick = { uriHandler.openUri("https://ko-fi.com/jsguaman") }) {
-                Icon(
-                    imageVector = Icons.Rounded.FavoriteBorder,
-                    contentDescription = "Apoyar en Ko-fi",
-                    tint = MareaAccent
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Tu biblioteca",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
+                    color = MareaText
+                )
+                Text(
+                    text = "${songCount(downloadedTracks.size)} sin conexión · ${playlists.size} playlists",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MareaTextSecondary
                 )
             }
+            GlassIconButton(
+                icon = Icons.Rounded.FavoriteBorder,
+                contentDescription = "Apoyar en Ko-fi",
+                onClick = { uriHandler.openUri("https://ko-fi.com/jsguaman") },
+                tint = MareaCyan
+            )
         }
 
         val tabs = listOf(
@@ -186,36 +231,32 @@ fun LibraryScreen(
             "Cola (${activeDownloads.size})"
         )
 
-        TabRow(
-            selectedTabIndex = selectedTab,
-            containerColor = MaterialTheme.colorScheme.background,
-            contentColor = MareaAccent,
-            indicator = { tabPositions ->
-                TabRowDefaults.SecondaryIndicator(
-                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                    color = MareaAccent
-                )
-            }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            val icons = listOf(Icons.Rounded.DownloadDone, Icons.AutoMirrored.Rounded.QueueMusic, Icons.Rounded.Downloading)
             tabs.forEachIndexed { index, title ->
-                Tab(
+                GlassChip(
+                    text = title,
                     selected = selectedTab == index,
                     onClick = { selectedTab = index },
-                    text = {
-                        Text(
-                            text = title,
-                            maxLines = 1,
-                            color = if (selectedTab == index) MareaAccent else MareaTextSecondary
-                        )
-                    }
+                    icon = icons[index]
                 )
             }
         }
+        Spacer(Modifier.height(8.dp))
 
         when (selectedTab) {
             0 -> {
                 if (downloadedTracks.isEmpty()) {
-                    EmptyState("Sin descargas")
+                    EmptyState(
+                        if (isPremium) "Aún no descargas canciones. Toca el ícono de descarga en cualquier canción."
+                        else "Descargar para escuchar sin conexión es de Premium. Actívalo en Cuenta."
+                    )
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -229,8 +270,6 @@ fun LibraryScreen(
                                 onDownloadClick = { onRetryDownload(track) },
                                 onArtistClick = onArtistClick,
                                 onAddToPlaylist = { onAddToPlaylist(track) },
-                                onEditCover = { onEditCover(track) },
-                                onTrimTrack = { onTrimTrack(track) },
                                 onDeleteTrack = { onDeleteTrack(track) }
                             )
                         }
@@ -240,19 +279,17 @@ fun LibraryScreen(
 
             1 -> {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    OutlinedButton(
+                    GlowButton(
+                        text = "Nueva playlist",
+                        icon = Icons.Rounded.Add,
                         onClick = onCreateNewPlaylist,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 10.dp)
-                    ) {
-                        Icon(Icons.Rounded.Add, contentDescription = null, tint = MareaAccent)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Nueva Playlist", color = MareaAccent, fontWeight = FontWeight.SemiBold)
-                    }
+                    )
 
                     if (playlists.isEmpty()) {
-                        EmptyState("Sin playlists")
+                        EmptyState("Crea tu primera playlist y junta tus canciones favoritas.")
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
@@ -262,40 +299,33 @@ fun LibraryScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 5.dp)
+                                        .glass(RoundedCornerShape(20.dp))
                                         .clickable { openedPlaylist = playlist }
-                                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                                        .padding(10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     val cover = playlist.coverUrl.ifBlank {
                                         playlist.tracks.firstOrNull { it.bestCoverUrl.isNotBlank() }?.bestCoverUrl.orEmpty()
                                     }
-                                    if (cover.isNotBlank()) {
-                                        AsyncImage(
-                                            model = cover,
-                                            contentDescription = playlist.name,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier
-                                                .size(56.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                        )
-                                    } else {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Rounded.PlaylistPlay,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(56.dp),
-                                            tint = MareaTextSecondary
-                                        )
-                                    }
+                                    CoverArt(
+                                        url = cover,
+                                        modifier = Modifier.size(58.dp),
+                                        shape = RoundedCornerShape(15.dp),
+                                        requestSize = 200,
+                                        fallback = Icons.AutoMirrored.Rounded.PlaylistPlay
+                                    )
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = playlist.name,
-                                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                                            color = MareaText,
+                                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
-                                            text = "${playlist.tracks.size} canciones",
+                                            text = songCount(playlist.tracks.size),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MareaTextSecondary
                                         )
@@ -316,7 +346,7 @@ fun LibraryScreen(
 
             2 -> {
                 if (activeDownloads.isEmpty()) {
-                    EmptyState("Sin descargas en cola")
+                    EmptyState("No hay descargas en curso.")
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -339,18 +369,29 @@ fun LibraryScreen(
     }
 }
 
+private fun songCount(n: Int): String = if (n == 1) "1 canción" else "$n canciones"
+
 @Composable
 private fun EmptyState(message: String) {
     Box(
         modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
+            .fillMaxWidth()
+            .padding(16.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = message,
-            color = MareaTextSecondary,
-            style = MaterialTheme.typography.bodyMedium
-        )
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Icon(
+                Icons.Rounded.GraphicEq,
+                contentDescription = null,
+                tint = MareaCyan,
+                modifier = Modifier.glow(MareaAccent, spread = 10.dp, alpha = 0.4f)
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = message,
+                color = MareaTextSecondary,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
     }
 }

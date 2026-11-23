@@ -1,42 +1,43 @@
 package com.marea.music.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.marea.music.player.PlaybackUiState
-import com.marea.music.ui.theme.MareaCard
 import com.marea.music.ui.theme.MareaAccent
+import com.marea.music.ui.theme.MareaCyan
+import com.marea.music.ui.theme.MareaOnAccent
+import com.marea.music.ui.theme.MareaText
 import com.marea.music.ui.theme.MareaTextSecondary
 
+/** Reproductor flotante de cristal sobre la barra de navegación. */
 @Composable
 fun MiniPlayer(
     playbackState: PlaybackUiState,
@@ -48,96 +49,98 @@ fun MiniPlayer(
     val progress = if (playbackState.durationMs > 0) {
         (playbackState.positionMs.toFloat() / playbackState.durationMs.toFloat()).coerceIn(0f, 1f)
     } else 0f
+    val shape = RoundedCornerShape(22.dp)
 
-    Surface(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onExpand),
-        color = MareaCard,
-        tonalElevation = 4.dp
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .clip(shape)
+            .background(Glass.fillStrong, shape)
+            .background(Glass.selected, shape)
+            .border(1.dp, Glass.border, shape)
+            .clickable(onClick = onExpand)
     ) {
-        Column {
-            Row(
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CoverArt(
+                url = track.bestCoverUrl,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (track.bestCoverUrl.isNotBlank()) {
-                    AsyncImage(
-                        model = track.bestCoverUrl,
-                        contentDescription = track.cleanTitle,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Rounded.MusicNote,
-                        contentDescription = null,
-                        tint = MareaTextSecondary,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
-                            .padding(10.dp)
-                    )
-                }
+                    .size(46.dp)
+                    .glow(MareaAccent, spread = 6.dp, alpha = if (playbackState.isPlaying) 0.45f else 0.15f),
+                shape = RoundedCornerShape(14.dp),
+                requestSize = 160
+            )
 
-                Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
-                Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = track.cleanTitle.ifBlank { track.title },
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Text(
-                        text = track.artist,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MareaTextSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                if (playbackState.isBuffering) {
-                    CircularProgressIndicator(
-                        modifier = Modifier
-                            .padding(end = 12.dp)
-                            .size(24.dp),
-                        color = MareaAccent,
-                        strokeWidth = 2.5.dp
-                    )
-                } else {
-                    IconButton(onClick = onTogglePlayPause) {
-                        Icon(
-                            imageVector = if (playbackState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            contentDescription = "Play/Pause",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = track.cleanTitle.ifBlank { track.title },
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MareaText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (playbackState.isPlaying) {
+                        NowPlayingBars(height = 9.dp, barWidth = 2.dp)
+                        Spacer(Modifier.width(6.dp))
                     }
+                    Text(
+                        text = if (playbackState.isAd) "Anuncio" else track.artist,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (playbackState.isAd) MareaCyan else MareaTextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
 
-            LinearProgressIndicator(
-                progress = { progress },
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp),
-                color = MareaAccent,
-                trackColor = MaterialTheme.colorScheme.surface
+                    .size(42.dp)
+                    .glow(MareaAccent, spread = 6.dp, alpha = 0.35f)
+                    .clip(CircleShape)
+                    .background(Glass.accent, CircleShape)
+                    .clickable(onClick = onTogglePlayPause),
+                contentAlignment = Alignment.Center
+            ) {
+                if (playbackState.isBuffering) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = MareaOnAccent,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (playbackState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        contentDescription = if (playbackState.isPlaying) "Pausar" else "Reproducir",
+                        tint = MareaOnAccent
+                    )
+                }
+            }
+        }
+
+        // Progreso: línea luminosa en el borde inferior.
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(horizontal = 16.dp)
+                .fillMaxWidth()
+                .height(2.dp)
+                .clip(RoundedCornerShape(1.dp))
+                .background(Color.White.copy(alpha = 0.10f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(progress)
+                    .background(Glass.accentHorizontal)
             )
         }
     }

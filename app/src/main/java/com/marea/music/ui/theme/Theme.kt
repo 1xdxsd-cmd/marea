@@ -22,6 +22,12 @@ val MareaText = Color(0xFFEAF2F8)
 val MareaTextSecondary = Color(0xFF93A8B8)
 val MareaError = Color(0xFFFF7A85)
 
+// Acentos del estilo cristal: un cian luminoso para degradados y brillos, y un violeta muy tenue
+// para dar profundidad al fondo. El azul del logo sigue siendo el color principal.
+val MareaCyan = Color(0xFF5CD6FF)
+val MareaViolet = Color(0xFF5B4BDB)
+val MareaGlassLine = Color(0x33FFFFFF)
+
 // Bricolage Grotesque para títulos, Figtree para el texto (como en Marea web).
 val BricolageGrotesque = FontFamily(
     Font(R.font.bricolage_grotesque_500, FontWeight.Medium),
