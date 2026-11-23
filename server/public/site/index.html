@@ -9,8 +9,9 @@
   <meta property="og:title" content="Marea · Tu música, a tu ritmo">
   <meta property="og:description" content="Escucha, descarga y canta con la letra sincronizada. Descarga Marea para Android.">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="/logo.png">
-  <link rel="icon" href="logo.png">
+  <meta property="og:image" content="https://marea.ventasthalia.com/logo.png">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20384%20384%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%231e9cf7%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%230670d2%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle%20cx%3D%22192%22%20cy%3D%22192%22%20r%3D%22190%22%20fill%3D%22url%28%23g%29%22/%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%230c1a23%22%20stroke-width%3D%2232%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M94%20142c26-32%2050-32%2074-2%22/%3E%3Cpath%20d%3D%22M64%20214c34-44%2066-48%2096-14%2034%2044%2050%2066%2080%2060%2026-6%2040-50%2060-78%208-10%2016-8%2022%208%22/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="alternate icon" href="logo.png">
   <link rel="apple-touch-icon" href="logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,6 +21,7 @@
   <script src="main.js" defer></script>
 </head>
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="marea-logo" viewBox="0 0 384 384"><defs><linearGradient id="marea-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1e9cf7"/><stop offset="1" stop-color="#0670d2"/></linearGradient></defs><circle cx="192" cy="192" r="190" fill="url(#marea-g)"/><g fill="none" stroke="#0c1a23" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"><path d="M94 142c26-32 50-32 74-2"/><path d="M64 214c34-44 66-48 96-14 34 44 50 66 80 60 26-6 40-50 60-78 8-10 16-8 22 8"/></g></symbol></svg>
   <div class="aurora" aria-hidden="true">
     <span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span>
   </div>
@@ -27,7 +29,7 @@
 
   <header class="nav" id="nav">
     <a class="brand" href="#inicio" aria-label="Marea, inicio">
-      <img src="logo.png" alt="" width="34" height="34">
+      <svg class="logo" width="34" height="34" aria-hidden="true"><use href="#marea-logo"/></svg>
       <span>Marea</span>
     </a>
     <nav class="nav-links" aria-label="Secciones">
@@ -75,7 +77,7 @@
               <span class="ph-badge">Premium</span>
             </div>
             <div class="cover">
-              <img src="logo.png" alt="" class="cover-logo">
+              <svg class="logo cover-logo" aria-hidden="true"><use href="#marea-logo"/></svg>
               <div class="cover-wave"></div>
             </div>
             <div class="ph-track">
@@ -301,7 +303,7 @@
     <!-- CTA final -->
     <section class="final reveal">
       <div class="final-inner">
-        <img src="logo.png" alt="" width="72" height="72" class="final-logo">
+        <svg class="logo final-logo" width="72" height="72" aria-hidden="true"><use href="#marea-logo"/></svg>
         <h2>Tu música te espera.</h2>
         <p>Descarga Marea y dale play.</p>
         <a class="btn btn-lg btn-light js-download magnetic" href="/downloads/marea.apk" download>
@@ -314,7 +316,7 @@
 
   <footer class="footer">
     <div class="foot-brand">
-      <img src="logo.png" alt="" width="28" height="28">
+      <svg class="logo" width="28" height="28" aria-hidden="true"><use href="#marea-logo"/></svg>
       <span>Marea</span>
     </div>
     <p>© <span class="js-year">2026</span> <span class="js-owner">Anthony</span>. Todos los derechos reservados.</p>
