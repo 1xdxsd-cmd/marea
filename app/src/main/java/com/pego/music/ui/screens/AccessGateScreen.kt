@@ -9,16 +9,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,10 +35,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,14 +50,18 @@ import com.pego.music.R
 import com.pego.music.data.access.AccessRepository
 import com.pego.music.data.access.AccessState
 import com.pego.music.ui.theme.BricolageGrotesque
-import com.pego.music.ui.theme.MareaBg
-import com.pego.music.ui.theme.MareaText
 import com.pego.music.ui.theme.MareaAccent
-import com.pego.music.ui.theme.MareaTextSecondary
+import com.pego.music.ui.theme.MareaBg
+import com.pego.music.ui.theme.MareaCard
 import com.pego.music.ui.theme.MareaOnAccent
+import com.pego.music.ui.theme.MareaText
+import com.pego.music.ui.theme.MareaTextSecondary
 import kotlinx.coroutines.launch
 
-/** Muestra [content] solo si el servidor confirma que este dispositivo tiene acceso. */
+/**
+ * Muestra [content] solo si hay sesión iniciada y la cuenta tiene una suscripción activa.
+ * Sin sesión: inicio de sesión / registro. Con sesión pero sin plan: sección de suscripción.
+ */
 @Composable
 fun AccessGate(
     access: AccessRepository,
@@ -64,27 +76,59 @@ fun AccessGate(
             CircularProgressIndicator(color = MareaAccent)
         }
 
-        is AccessState.Locked -> AccessGateScreen(access = access, state = s)
-        is AccessState.Granted -> content()
+        is AccessState.SignedOut -> LoginScreen(access = access, state = s)
+        is AccessState.SignedIn -> if (s.hasAccess) {
+            content()
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MareaBg)
+                    .systemBarsPadding()
+            ) {
+                SubscriptionScreen(access = access, state = s)
+            }
+        }
     }
 }
 
 @Composable
-private fun AccessGateScreen(
+private fun LoginScreen(
     access: AccessRepository,
-    state: AccessState.Locked
+    state: AccessState.SignedOut
 ) {
     val scope = rememberCoroutineScope()
-    var code by remember { mutableStateOf("") }
+    val focus = LocalFocusManager.current
+    var registering by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
+    val canSubmit = !loading && email.isNotBlank() && password.isNotEmpty() &&
+        (!registering || (name.isNotBlank() && confirm.isNotEmpty()))
+
     fun submit() {
-        if (loading || code.isBlank()) return
+        if (!canSubmit) return
+        if (registering && password.length < 8) {
+            error = "La contraseña debe tener al menos 8 caracteres"
+            return
+        }
+        if (registering && password != confirm) {
+            error = "Las contraseñas no coinciden"
+            return
+        }
         loading = true
         error = null
+        focus.clearFocus()
         scope.launch {
-            error = access.redeem(code)
+            error = if (registering) {
+                access.register(name, email, password)
+            } else {
+                access.login(email, password)
+            }
             loading = false
         }
     }
@@ -94,6 +138,8 @@ private fun AccessGateScreen(
             .fillMaxSize()
             .background(MareaBg)
             .systemBarsPadding()
+            .imePadding()
+            .verticalScroll(rememberScrollState())
             .padding(28.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -113,10 +159,10 @@ private fun AccessGateScreen(
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = if (state.needsNetwork) {
-                "No pudimos verificar tu acceso"
-            } else {
-                "Esta app es privada. Ingresa el código de invitación de tu plan."
+            text = when {
+                state.needsNetwork -> "No pudimos verificar tu acceso"
+                registering -> "Crea tu cuenta"
+                else -> "Inicia sesión para continuar"
             },
             color = MareaTextSecondary,
             textAlign = TextAlign.Center,
@@ -129,29 +175,82 @@ private fun AccessGateScreen(
                 onClick = { scope.launch { access.verify(force = true) } },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(26.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MareaAccent)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MareaAccent,
+                    contentColor = MareaOnAccent
+                )
             ) {
                 Text("Reintentar", fontWeight = FontWeight.Bold)
             }
         } else {
+            if (registering) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(80) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("Nombre") },
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Words,
+                        imeAction = ImeAction.Next
+                    ),
+                    keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                Spacer(Modifier.height(12.dp))
+            }
             OutlinedTextField(
-                value = code,
-                onValueChange = { code = it.uppercase().take(16) },
+                value = email,
+                onValueChange = { email = it.trim().take(120) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                label = { Text("Código de invitación") },
-                isError = error != null,
+                label = { Text("Correo") },
                 keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Characters,
-                    imeAction = ImeAction.Done
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Next
                 ),
-                keyboardActions = KeyboardActions(onDone = { submit() }),
+                keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
                 shape = RoundedCornerShape(16.dp)
             )
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it.take(128) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text(if (registering) "Contraseña (mín. 8)" else "Contraseña") },
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = if (registering) ImeAction.Next else ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focus.moveFocus(FocusDirection.Down) },
+                    onDone = { submit() }
+                ),
+                shape = RoundedCornerShape(16.dp)
+            )
+            if (registering) {
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = confirm,
+                    onValueChange = { confirm = it.take(128) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("Repite la contraseña") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { submit() }),
+                    shape = RoundedCornerShape(16.dp)
+                )
+            }
+            Spacer(Modifier.height(20.dp))
             Button(
                 onClick = ::submit,
-                enabled = !loading && code.isNotBlank(),
+                enabled = canSubmit,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(26.dp),
                 colors = ButtonDefaults.buttonColors(
@@ -166,20 +265,183 @@ private fun AccessGateScreen(
                         color = MareaOnAccent
                     )
                 } else {
-                    Text("Entrar", fontWeight = FontWeight.Bold)
+                    Text(if (registering) "Crear cuenta" else "Iniciar sesión", fontWeight = FontWeight.Bold)
                 }
+            }
+            Spacer(Modifier.height(8.dp))
+            TextButton(
+                onClick = {
+                    registering = !registering
+                    error = null
+                    confirm = ""
+                },
+                enabled = !loading
+            ) {
+                Text(
+                    text = if (registering) "¿Ya tienes cuenta? Inicia sesión" else "¿No tienes cuenta? Regístrate",
+                    color = MareaAccent
+                )
             }
         }
 
         val message = error ?: state.message
         if (message != null) {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
             Text(
                 text = message,
                 color = if (error != null) MaterialTheme.colorScheme.error else MareaTextSecondary,
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodyMedium
             )
+        }
+    }
+}
+
+/**
+ * Sección Cuenta / Suscripción: muestra el plan de la cuenta y permite activarlo con
+ * un código de invitación (PEGO-XXXX-XXXX). También sirve para cerrar sesión.
+ */
+@Composable
+fun SubscriptionScreen(
+    access: AccessRepository,
+    state: AccessState.SignedIn,
+    modifier: Modifier = Modifier
+) {
+    val scope = rememberCoroutineScope()
+    val focus = LocalFocusManager.current
+    var code by remember { mutableStateOf("") }
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var success by remember { mutableStateOf<String?>(null) }
+
+    fun submit() {
+        if (loading || code.isBlank()) return
+        loading = true
+        error = null
+        success = null
+        focus.clearFocus()
+        scope.launch {
+            error = access.redeem(code)
+            if (error == null) {
+                code = ""
+                success = "¡Listo! Tu suscripción está activa."
+            }
+            loading = false
+        }
+    }
+
+    val sub = state.subscription
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .imePadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 28.dp)
+    ) {
+        Text(
+            text = "Cuenta",
+            color = MareaText,
+            fontSize = 32.sp,
+            fontFamily = BricolageGrotesque,
+            fontWeight = FontWeight.ExtraBold
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(state.name, color = MareaText, style = MaterialTheme.typography.titleMedium)
+        Text(state.email, color = MareaTextSecondary, style = MaterialTheme.typography.bodyMedium)
+
+        Spacer(Modifier.height(28.dp))
+        Text(
+            text = "Suscripción",
+            color = MareaText,
+            fontSize = 22.sp,
+            fontFamily = BricolageGrotesque,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(12.dp))
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MareaCard, RoundedCornerShape(18.dp))
+                .padding(18.dp)
+        ) {
+            if (sub != null && sub.active) {
+                Text("Plan ${sub.planLabel}", color = MareaAccent, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Spacer(Modifier.height(4.dp))
+                Text(sub.family, color = MareaText, style = MaterialTheme.typography.bodyLarge)
+                if (state.offline) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Sin conexión: se verificará cuando vuelvas a tener internet.",
+                        color = MareaTextSecondary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            } else {
+                Text("Sin suscripción activa", color = MareaText, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Ingresa el código de invitación de tu plan para empezar a usar Marea.",
+                    color = MareaTextSecondary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { code = it.uppercase().take(16) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("Código (PEGO-XXXX-XXXX)") },
+                    isError = error != null,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Characters,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { submit() }),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = ::submit,
+                    enabled = !loading && code.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(25.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MareaAccent,
+                        contentColor = MareaOnAccent
+                    )
+                ) {
+                    if (loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.5.dp,
+                            color = MareaOnAccent
+                        )
+                    } else {
+                        Text("Activar", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            val message = error ?: success ?: state.message
+            if (message != null) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = message,
+                    color = if (error != null) MaterialTheme.colorScheme.error else MareaTextSecondary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+
+        Spacer(Modifier.height(28.dp))
+        OutlinedButton(
+            onClick = { scope.launch { access.logout() } },
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(25.dp)
+        ) {
+            Text("Cerrar sesión", color = MareaText, fontWeight = FontWeight.Bold)
         }
     }
 }

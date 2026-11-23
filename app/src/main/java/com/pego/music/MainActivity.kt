@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Search
@@ -38,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.pego.music.data.access.AccessState
+import com.pego.music.data.access.hasAccess
 import com.pego.music.data.extractor.YouTubeUrlParser
 import com.pego.music.domain.model.TrackItem
 import com.pego.music.ui.PegoViewModel
@@ -52,6 +54,7 @@ import com.pego.music.ui.screens.AccessGate
 import com.pego.music.ui.screens.HomeScreen
 import com.pego.music.ui.screens.LibraryScreen
 import com.pego.music.ui.screens.SearchScreen
+import com.pego.music.ui.screens.SubscriptionScreen
 import com.pego.music.ui.theme.MareaBg
 import com.pego.music.ui.theme.MareaAccent
 import com.pego.music.ui.theme.MareaSurface
@@ -75,10 +78,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         askNotificationPermissionIfNeeded()
 
-        // Si el acceso se revoca, detener la reproducción.
+        // Si se cierra la sesión o se pierde la suscripción, detener la reproducción.
         lifecycleScope.launch {
             container.accessRepository.state.collect { state ->
-                if (state is AccessState.Locked) container.playerController.pause()
+                if (!state.hasAccess) container.playerController.pause()
             }
         }
 
@@ -111,6 +114,7 @@ class MainActivity : ComponentActivity() {
                     val isLoadingLyrics by viewModel.isLoadingLyrics.collectAsState()
                     val coverEditorState by viewModel.coverEditorState.collectAsState()
                     val uiMessage by viewModel.uiMessage.collectAsState()
+                    val accessState by container.accessRepository.state.collectAsState()
 
                     LaunchedEffect(initialSharedUrl) {
                         if (initialSharedUrl != null) {
@@ -169,6 +173,13 @@ class MainActivity : ComponentActivity() {
                                         onClick = { selectedTab = 2 },
                                         icon = { Icon(Icons.Rounded.LibraryMusic, contentDescription = "Biblioteca") },
                                         label = { Text("Biblioteca") },
+                                        colors = navColors
+                                    )
+                                    NavigationBarItem(
+                                        selected = selectedTab == 3,
+                                        onClick = { selectedTab = 3 },
+                                        icon = { Icon(Icons.Rounded.AccountCircle, contentDescription = "Cuenta") },
+                                        label = { Text("Cuenta") },
                                         colors = navColors
                                     )
                                 }
@@ -247,6 +258,13 @@ class MainActivity : ComponentActivity() {
                                     onDeletePlaylist = viewModel::deletePlaylist,
                                     onCreateNewPlaylist = { showCreatePlaylist = true }
                                 )
+
+                                3 -> (accessState as? AccessState.SignedIn)?.let { signedIn ->
+                                    SubscriptionScreen(
+                                        access = container.accessRepository,
+                                        state = signedIn
+                                    )
+                                }
                             }
                         }
                     }
@@ -355,7 +373,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (container.accessRepository.state.value !is AccessState.Granted) return
+        if (!container.accessRepository.state.value.hasAccess) return
         extractUrlFromIntent(intent)?.let { url ->
             viewModel.submitSearchOrLink(url)
         }

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Marea · Administración</title>
+  <link rel="icon" href="logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <!-- Inicio de sesión -->
+  <main id="auth" class="auth" hidden>
+    <div class="auth-card">
+      <img src="logo.png" alt="" class="auth-logo">
+      <h1>Marea</h1>
+      <p class="muted" id="auth-sub">Administración de accesos</p>
+
+      <form id="login-form" class="stack">
+        <label>Correo<input name="email" type="email" autocomplete="username" required></label>
+        <label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
+        <button class="btn primary" type="submit">Iniciar sesión</button>
+      </form>
+
+      <form id="setup-form" class="stack" hidden>
+        <p class="note">Primera vez: crea la cuenta de administrador. El código de configuración aparece en la consola del servidor al arrancar (o escribe <code>admin:setup</code> en la consola).</p>
+        <label>Código de configuración<input name="code" inputmode="numeric" autocomplete="one-time-code" required></label>
+        <label>Nombre<input name="name" autocomplete="name" required></label>
+        <label>Correo<input name="email" type="email" autocomplete="username" required></label>
+        <label>Contraseña (mín. 8)<input name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+        <button class="btn primary" type="submit">Crear administrador</button>
+      </form>
+
+      <p class="error" id="auth-error" role="alert"></p>
+    </div>
+  </main>
+
+  <!-- Panel -->
+  <div id="app" hidden>
+    <header class="topbar">
+      <div class="brand"><img src="logo.png" alt=""><span>Marea</span><span class="tag">admin</span></div>
+      <div class="who"><span id="who"></span><button class="btn ghost small" id="logout">Cerrar sesión</button></div>
+    </header>
+
+    <main class="content">
+      <section class="panel">
+        <h2>Nuevo plan</h2>
+        <form id="new-family" class="row">
+          <input name="name" placeholder="Nombre (ej. Familia Guamán)" required>
+          <select name="plan" id="plan-select"></select>
+          <button class="btn primary" type="submit">Crear plan</button>
+        </form>
+      </section>
+
+      <div class="section-head">
+        <h2>Planes</h2>
+        <button class="btn ghost small" id="refresh">Actualizar</button>
+      </div>
+      <div id="families" class="families"></div>
+
+      <section class="panel">
+        <h2>Cuentas registradas</h2>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Nombre</th><th>Correo</th><th>Suscripción</th><th>Último uso</th></tr></thead>
+            <tbody id="users"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="code-dialog">
+    <h3>Código para <span id="code-for"></span></h3>
+    <p class="muted">Compártelo. La persona inicia sesión en la app y lo pone en <b>Cuenta → Suscripción</b>.</p>
+    <div class="code-box"><code id="code-value"></code><button class="btn small" id="copy-code">Copiar</button></div>
+    <form method="dialog"><button class="btn primary">Listo</button></form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script src="admin.js"></script>
+</body>
+</html>
