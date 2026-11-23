@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="es" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Marea · Tu música, a tu ritmo</title>
+  <meta name="description" content="Marea es la app de música para Android: escucha, descarga y sigue la letra de tus canciones. Gratis o Premium sin anuncios y con ecualizador.">
+  <meta name="theme-color" content="#0b1720">
+  <meta property="og:title" content="Marea · Tu música, a tu ritmo">
+  <meta property="og:description" content="Escucha, descarga y canta con la letra sincronizada. Descarga Marea para Android.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="/logo.png">
+  <link rel="icon" href="logo.png">
+  <link rel="apple-touch-icon" href="logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <script src="config.js" defer></script>
+  <script src="main.js" defer></script>
+</head>
+<body>
+  <div class="aurora" aria-hidden="true">
+    <span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span>
+  </div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="nav" id="nav">
+    <a class="brand" href="#inicio" aria-label="Marea, inicio">
+      <img src="logo.png" alt="" width="34" height="34">
+      <span>Marea</span>
+    </a>
+    <nav class="nav-links" aria-label="Secciones">
+      <a href="#funciones">Funciones</a>
+      <a href="#premium">Premium</a>
+      <a href="#planes">Planes</a>
+      <a href="#faq">Preguntas</a>
+    </nav>
+    <a class="btn btn-sm btn-primary js-download" href="/downloads/marea.apk" download>Descargar</a>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero" id="inicio">
+      <div class="hero-copy">
+        <p class="eyebrow reveal"><span class="dot"></span> Nuevo · App para Android</p>
+        <h1 class="hero-title">
+          <span class="line"><span class="word">¿Quieres</span> <span class="word">escuchar</span></span>
+          <span class="line"><span class="word grad">música?</span></span>
+        </h1>
+        <p class="lead reveal" style="--d:.35s">
+          Déjate llevar por <strong>Marea</strong>. Busca cualquier canción, escúchala en segundo plano,
+          descárgala para cuando no tengas datos y canta con la letra sincronizada.
+        </p>
+        <div class="cta-row reveal" style="--d:.5s">
+          <a class="btn btn-lg btn-primary js-download magnetic" href="/downloads/marea.apk" download>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M5 21h14" /></svg>
+            <span>Descargar APK</span>
+            <span class="shine" aria-hidden="true"></span>
+          </a>
+          <a class="btn btn-lg btn-ghost" href="#funciones">Ver lo que hace</a>
+        </div>
+        <p class="meta reveal" style="--d:.6s">
+          <span class="js-version">Versión 0.1.0</span> · Android 7 o superior · <span class="js-size">Gratis</span>
+        </p>
+      </div>
+
+      <div class="hero-visual reveal" style="--d:.25s">
+        <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
+        <div class="phone tilt" id="phone">
+          <div class="notch"></div>
+          <div class="screen">
+            <div class="ph-top">
+              <span>Sonando ahora</span>
+              <span class="ph-badge">Premium</span>
+            </div>
+            <div class="cover">
+              <img src="logo.png" alt="" class="cover-logo">
+              <div class="cover-wave"></div>
+            </div>
+            <div class="ph-track">
+              <strong>Olas de medianoche</strong>
+              <span>Tu mix de Marea</span>
+            </div>
+            <div class="progress"><span class="bar"></span></div>
+            <div class="ph-time"><span>1:24</span><span>3:41</span></div>
+            <div class="controls" aria-hidden="true">
+              <span class="ctl">⇄</span>
+              <span class="ctl">⏮</span>
+              <span class="ctl play"><i></i><i></i></span>
+              <span class="ctl">⏭</span>
+              <span class="ctl">↻</span>
+            </div>
+            <div class="lyrics" aria-hidden="true">
+              <p>y el mar me trae tu voz</p>
+              <p>cuando la noche se apaga</p>
+              <p>sube la marea en mí</p>
+              <p>y no quiero volver</p>
+            </div>
+          </div>
+        </div>
+        <div class="chip c1"><span class="eq-mini"><i></i><i></i><i></i><i></i></span> Ecualizador</div>
+        <div class="chip c2">✦ Letra sincronizada</div>
+        <div class="chip c3">⤓ Sin conexión</div>
+      </div>
+
+      <a class="scroll-hint" href="#funciones" aria-label="Bajar"><span></span></a>
+    </section>
+
+    <!-- Marquesina -->
+    <div class="marquee" aria-hidden="true">
+      <div class="track">
+        <span>Pop</span><span>Reguetón</span><span>Salsa</span><span>Rock</span><span>Cumbia</span><span>Lo-fi</span><span>Baladas</span><span>Electrónica</span><span>Rap</span><span>Indie</span>
+        <span>Pop</span><span>Reguetón</span><span>Salsa</span><span>Rock</span><span>Cumbia</span><span>Lo-fi</span><span>Baladas</span><span>Electrónica</span><span>Rap</span><span>Indie</span>
+      </div>
+    </div>
+
+    <!-- Funciones -->
+    <section class="section" id="funciones">
+      <div class="section-head">
+        <p class="kicker reveal">Funciones</p>
+        <h2 class="reveal" style="--d:.08s">Todo lo que necesitas para<br><span class="grad">vivir tu música</span></h2>
+        <p class="sub reveal" style="--d:.16s">Pensada para el día a día: rápida, ligera y bonita.</p>
+      </div>
+
+      <div class="bento">
+        <article class="card glow big reveal">
+          <div class="card-art art-lyrics" aria-hidden="true">
+            <p>cuando la noche se apaga</p>
+            <p class="on">sube la marea en mí</p>
+            <p>y no quiero volver</p>
+          </div>
+          <h3>Letra sincronizada</h3>
+          <p>La letra avanza con la canción, justo debajo del reproductor. Cambia sola cuando pasas a la siguiente.</p>
+        </article>
+        <article class="card glow reveal" style="--d:.08s">
+          <div class="icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-5-5m5 5 5-5M5 21h14"/></svg>
+          </div>
+          <h3>Descarga y escucha sin datos</h3>
+          <p>Guarda tus canciones y playlists en el teléfono con un toque.</p>
+        </article>
+        <article class="card glow reveal" style="--d:.16s">
+          <div class="icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 18V6m5 12V10m5 8V4m5 14v-6"/></svg>
+          </div>
+          <h3>Tu top</h3>
+          <p>Tus artistas y canciones más escuchadas, y recomendaciones según tu gusto.</p>
+        </article>
+        <article class="card glow reveal" style="--d:.08s">
+          <div class="icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
+          </div>
+          <h3>Portadas en HD</h3>
+          <p>Marea busca la mejor portada para cada canción y la guarda contigo.</p>
+        </article>
+        <article class="card glow reveal" style="--d:.16s">
+          <div class="icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          </div>
+          <h3>Segundo plano y audífonos</h3>
+          <p>Sigue sonando con la pantalla apagada. Cambia de canción desde tus audífonos.</p>
+        </article>
+        <article class="card glow wide reveal" style="--d:.1s">
+          <div class="card-art art-eq" aria-hidden="true">
+            <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+          </div>
+          <h3>Playlists, artistas y recortes</h3>
+          <p>Crea playlists, importa por enlace con <em>Compartir → Marea</em>, explora artistas y recorta intros largas.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- Gratis vs Premium -->
+    <section class="section" id="premium">
+      <div class="section-head">
+        <p class="kicker reveal">Gratis o Premium</p>
+        <h2 class="reveal" style="--d:.08s">Empieza gratis.<br><span class="grad">Sube la marea</span> cuando quieras.</h2>
+      </div>
+
+      <div class="compare">
+        <article class="tier reveal">
+          <header>
+            <h3>Gratis</h3>
+            <p class="price">Para siempre</p>
+          </header>
+          <ul>
+            <li class="yes">Escucha toda la música que quieras</li>
+            <li class="yes">Letra sincronizada y Tu top</li>
+            <li class="yes">Descargas y playlists</li>
+            <li class="meh">Un anuncio corto cada 3 canciones</li>
+            <li class="meh">Hasta 6 saltos por hora</li>
+            <li class="no">Ecualizador</li>
+          </ul>
+          <a class="btn btn-ghost btn-block js-download" href="/downloads/marea.apk" download>Descargar gratis</a>
+        </article>
+
+        <article class="tier premium reveal" style="--d:.12s">
+          <div class="tier-glow" aria-hidden="true"></div>
+          <header>
+            <h3>Premium <span class="tag">Recomendado</span></h3>
+            <p class="price">Desde $50 MXN</p>
+          </header>
+          <ul>
+            <li class="yes">Todo lo del plan gratis</li>
+            <li class="yes"><strong>Sin anuncios</strong></li>
+            <li class="yes"><strong>Saltos ilimitados</strong></li>
+            <li class="yes"><strong>Ecualizador</strong> para ajustar cada sonido</li>
+            <li class="yes">Se activa al momento, sin reinstalar</li>
+            <li class="yes">Comparte con tu dúo o tu familia</li>
+          </ul>
+          <a class="btn btn-primary btn-block" href="#planes">Ver planes Premium</a>
+        </article>
+      </div>
+    </section>
+
+    <!-- Planes -->
+    <section class="section" id="planes">
+      <div class="section-head">
+        <p class="kicker reveal">Planes Premium</p>
+        <h2 class="reveal" style="--d:.08s">Uno para ti, para dos<br>o para <span class="grad">toda la familia</span></h2>
+        <p class="sub reveal" style="--d:.16s">Cada persona usa su propia cuenta. El dueño del plan suma o quita gente desde la app.</p>
+      </div>
+
+      <div class="plans">
+        <article class="plan glow reveal">
+          <div class="seats" aria-hidden="true"><span></span></div>
+          <h3>Individual</h3>
+          <p class="plan-price"><span class="cur">$</span><strong>50</strong><span class="per">MXN</span></p>
+          <p class="plan-count">1 cuenta</p>
+          <p>Todo Premium para ti solo.</p>
+        </article>
+        <article class="plan glow reveal" style="--d:.1s">
+          <div class="seats" aria-hidden="true"><span></span><span></span></div>
+          <h3>Dúo</h3>
+          <p class="plan-price"><span class="cur">$</span><strong>80</strong><span class="per">MXN</span></p>
+          <p class="plan-count">2 cuentas</p>
+          <p>Para ti y alguien especial, cada uno con su música.</p>
+        </article>
+        <article class="plan glow featured reveal" style="--d:.2s">
+          <span class="plan-tag">Mejor precio por persona</span>
+          <div class="seats" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+          <h3>Familiar</h3>
+          <p class="plan-price"><span class="cur">$</span><strong>180</strong><span class="per">MXN</span></p>
+          <p class="plan-count">6 cuentas</p>
+          <p>Toda la casa con Premium, cada quien con su top y sus playlists.</p>
+        </article>
+      </div>
+      <div class="contract reveal">
+        <div>
+          <h3>¿Quieres contratar Premium?</h3>
+          <p>Habla con tu proveedor de Marea: elige tu plan, paga como acuerden y te da tu código de invitación. Lo pones en la app en <strong>Cuenta → Suscripción</strong> y listo.</p>
+        </div>
+        <a class="btn btn-primary js-contact" href="#" target="_blank" rel="noopener" hidden>Hablar con mi proveedor</a>
+      </div>
+    </section>
+
+    <!-- Pasos -->
+    <section class="section" id="empezar">
+      <div class="section-head">
+        <p class="kicker reveal">Cómo empezar</p>
+        <h2 class="reveal" style="--d:.08s">Listo en <span class="grad">tres pasos</span></h2>
+      </div>
+      <ol class="steps">
+        <li class="step reveal"><span class="num">1</span><h3>Descarga el APK</h3><p>Toca <em>Descargar APK</em> desde tu teléfono Android y ábrelo. Si te lo pide, permite instalar desde esta fuente.</p></li>
+        <li class="step reveal" style="--d:.1s"><span class="num">2</span><h3>Crea tu cuenta</h3><p>Regístrate con tu nombre, correo y una contraseña. Ya puedes escuchar gratis.</p></li>
+        <li class="step reveal" style="--d:.2s"><span class="num">3</span><h3>Activa Premium</h3><p>Pide tu código a tu proveedor, ponlo en <em>Cuenta → Suscripción</em> y adiós anuncios.</p></li>
+      </ol>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section narrow" id="faq">
+      <div class="section-head">
+        <p class="kicker reveal">Preguntas</p>
+        <h2 class="reveal" style="--d:.08s">Lo que suelen preguntar</h2>
+      </div>
+      <div class="faq">
+        <details class="reveal">
+          <summary>¿Por qué no está en Play Store?</summary>
+          <div><p>Marea se instala directamente con su APK. Es el mismo archivo que se publicaría en una tienda, solo que lo descargas desde aquí.</p></div>
+        </details>
+        <details class="reveal">
+          <summary>Mi teléfono dice que no puede instalar apps desconocidas</summary>
+          <div><p>Es un aviso normal de Android. Toca <em>Configuración</em> en el aviso, activa <em>Permitir desde esta fuente</em> y vuelve atrás para terminar la instalación.</p></div>
+        </details>
+        <details class="reveal">
+          <summary>¿Funciona en iPhone?</summary>
+          <div><p>Por ahora Marea es solo para Android 7 o superior.</p></div>
+        </details>
+        <details class="reveal">
+          <summary>¿Puedo usar mi cuenta en dos teléfonos?</summary>
+          <div><p>Puedes iniciar sesión en varios, pero la música suena en un solo dispositivo a la vez por cuenta. Para compartir, usa un plan Dúo o Familiar.</p></div>
+        </details>
+        <details class="reveal">
+          <summary>¿Cómo actualizo la app?</summary>
+          <div><p>Descarga el APK nuevo desde esta página e instálalo encima. Tu cuenta, descargas y playlists se mantienen.</p></div>
+        </details>
+      </div>
+    </section>
+
+    <!-- CTA final -->
+    <section class="final reveal">
+      <div class="final-inner">
+        <img src="logo.png" alt="" width="72" height="72" class="final-logo">
+        <h2>Tu música te espera.</h2>
+        <p>Descarga Marea y dale play.</p>
+        <a class="btn btn-lg btn-light js-download magnetic" href="/downloads/marea.apk" download>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M5 21h14" /></svg>
+          <span>Descargar APK</span>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="foot-brand">
+      <img src="logo.png" alt="" width="28" height="28">
+      <span>Marea</span>
+    </div>
+    <p>© <span class="js-year">2026</span> <span class="js-owner">Anthony</span>. Todos los derechos reservados.</p>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

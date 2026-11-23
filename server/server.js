@@ -397,7 +397,39 @@ app.use(
     },
   })
 );
-app.get('/', (_req, res) => res.redirect('/admin/'));
+// ---------- Web pública ----------
+
+// APK y otros archivos para descargar: sube marea.apk a public/downloads/ (o define MAREA_DOWNLOADS).
+const downloadsDir = process.env.MAREA_DOWNLOADS || path.join(__dirname, 'public', 'downloads');
+app.use(
+  '/downloads',
+  express.static(downloadsDir, {
+    dotfiles: 'ignore',
+    index: false,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.apk')) {
+        res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+        res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
+      }
+      res.setHeader('Cache-Control', 'no-cache');
+    },
+  })
+);
+
+// Landing de Marea en la raíz del dominio.
+app.use(
+  '/',
+  express.static(path.join(__dirname, 'public', 'site'), {
+    setHeaders: (res) => {
+      res.setHeader('X-Frame-Options', 'DENY');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors 'none'"
+      );
+    },
+  })
+);
 
 // ---------- Arranque ----------
 
