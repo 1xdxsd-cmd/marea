@@ -44,6 +44,19 @@ La app bloquea tráfico sin cifrar, así que publica el servidor detrás de HTTP
 proxy de tu panel). La web de administración también debe abrirse por HTTPS para que la contraseña
 viaje cifrada.
 
+## Web pública (landing)
+
+La raíz del dominio (`https://tu-servidor/`) muestra la página de Marea con el botón **Descargar APK**.
+Los archivos están en `public/site/`.
+
+- **Subir el APK:** copia el archivo a `public/downloads/marea.apk` (en Pterodactyl, con el
+  administrador de archivos). Se descarga desde `/downloads/marea.apk`. Mientras no exista, el botón
+  avisa que estará disponible pronto. Para actualizar, reemplaza el archivo con el mismo nombre.
+- **Cambiar enlace, versión o contacto:** edita `public/site/config.js` (`apkUrl`, `version`,
+  `contactUrl` para el botón "Hablar con mi proveedor", `owner` para el pie).
+- Precios de los planes: en `public/site/index.html`, sección `id="planes"`.
+- Opcional: `MAREA_DOWNLOADS` cambia la carpeta de descargas.
+
 ## Web de administración
 
 Abre `https://tu-servidor/admin`.
