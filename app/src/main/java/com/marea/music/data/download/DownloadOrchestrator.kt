@@ -5,7 +5,6 @@ import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.marea.music.data.local.MareaDao
@@ -70,13 +69,9 @@ class DownloadOrchestrator(
         }
         dao.insertPlaylistRefs(refs)
 
-        // Split into 2 concurrent lanes for 2x playlist throughput without triggering 429 bans
-        val requests = tracksPending.map { buildWorkRequest(it) }
-        val laneA = requests.filterIndexed { idx, _ -> idx % 2 == 0 }
-        val laneB = requests.filterIndexed { idx, _ -> idx % 2 == 1 }
-
-        enqueueLane("playlist_${preview.id}_a", laneA)
-        enqueueLane("playlist_${preview.id}_b", laneB)
+        // Cada canción es una tarea independiente: si una falla, las demás siguen. El límite de
+        // descargas simultáneas lo pone DownloadWorker.
+        tracksPending.forEach { enqueueWorkerForTrack(it) }
 
         playlistId
     }
@@ -88,19 +83,6 @@ class DownloadOrchestrator(
         if (existing != null && existing.downloadStatus != DownloadStatus.COMPLETED.name) {
             dao.deleteTrack(trackId)
         }
-    }
-
-    private fun enqueueLane(uniqueName: String, requests: List<OneTimeWorkRequest>) {
-        if (requests.isEmpty()) return
-        var continuation = workManager.beginUniqueWork(
-            uniqueName,
-            ExistingWorkPolicy.APPEND_OR_REPLACE,
-            requests.first()
-        )
-        requests.drop(1).forEach { nextReq ->
-            continuation = continuation.then(nextReq)
-        }
-        continuation.enqueue()
     }
 
     private fun enqueueWorkerForTrack(track: TrackItem) {

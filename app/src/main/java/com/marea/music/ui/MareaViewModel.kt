@@ -101,6 +101,57 @@ class MareaViewModel(
         .map { list -> list.associate { it.id to it.toDomain() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    /** Canciones de una lista ya resueltas a su id de YouTube (id original -> id descargado). */
+    private val _resolvedIds = MutableStateFlow<Map<String, String>>(emptyMap())
+    /** Canciones a las que se les tocó descargar y aún buscan su fuente. */
+    private val _resolvingIds = MutableStateFlow<Set<String>>(emptySet())
+
+    /** Todo lo necesario para saber el estado de descarga de cualquier canción en cualquier lista. */
+    private class SavedIndex(
+        val byId: Map<String, TrackItem>,
+        val byNormalized: Map<String, TrackItem>,
+        val aliases: Map<String, String>,
+        val resolving: Set<String>
+    ) {
+        fun match(track: TrackItem): TrackItem? =
+            byId[track.id]?.takeIf { it.downloadStatus != DownloadStatus.NONE }
+                ?: aliases[track.id]?.let { byId[it] }
+                ?: byNormalized[normalizedKey(track)]
+                ?: byId[track.id]
+
+        /** La canción con el estado de descarga real (en cola, descargando, descargada...). */
+        fun sync(track: TrackItem): TrackItem {
+            val saved = match(track)
+            if (saved == null || saved.downloadStatus == DownloadStatus.NONE) {
+                return if (track.id in resolving) {
+                    track.copy(downloadStatus = DownloadStatus.QUEUED, downloadProgress = 0)
+                } else track
+            }
+            return track.copy(
+                downloadStatus = saved.downloadStatus,
+                downloadProgress = saved.downloadProgress,
+                localUri = saved.localUri,
+                localFilePath = saved.localFilePath,
+                hdCoverUrl = track.hdCoverUrl.ifBlank { saved.hdCoverUrl }
+            )
+        }
+    }
+
+    private val savedIndex: StateFlow<SavedIndex> = combine(
+        allSavedTracksMap,
+        _resolvedIds,
+        _resolvingIds
+    ) { map, aliases, resolving ->
+        SavedIndex(
+            byId = map,
+            byNormalized = map.values
+                .filter { it.downloadStatus != DownloadStatus.NONE }
+                .associateBy { normalizedKey(it) },
+            aliases = aliases,
+            resolving = resolving
+        )
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, SavedIndex(emptyMap(), emptyMap(), emptyMap(), emptySet()))
+
     val downloadedTracks: StateFlow<List<TrackItem>> = dao.observeDownloadedTracks()
         .map { list -> list.map { it.toDomain() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -116,17 +167,17 @@ class MareaViewModel(
     /** Tus canciones más escuchadas, con el estado de descarga al día. */
     val topTracks: StateFlow<List<TrackItem>> = combine(
         container.listeningHistory.entries,
-        allSavedTracksMap
-    ) { entries, savedMap ->
+        savedIndex
+    ) { entries, index ->
         entries
             .sortedWith(compareByDescending<com.marea.music.data.history.PlayedTrack> { it.plays }.thenByDescending { it.lastPlayed })
             .take(10)
-            .map { savedMap[it.track.id] ?: it.track }
+            .map { index.sync(it.track) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Canciones nuevas de los artistas que más escuchas. */
-    val artistMix: StateFlow<List<TrackItem>> = combine(_artistMix, allSavedTracksMap) { mix, savedMap ->
-        mix.map { savedMap[it.id] ?: it }
+    val artistMix: StateFlow<List<TrackItem>> = combine(_artistMix, savedIndex) { mix, index ->
+        mix.map { index.sync(it) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
@@ -134,26 +185,9 @@ class MareaViewModel(
      */
     val recommendations: StateFlow<List<TrackItem>> = combine(
         _rawRecommendations,
-        allSavedTracksMap
-    ) { recs, savedMap ->
-        val byNormalized = savedMap.values.associateBy {
-            TitleCleaner.normalizeForMatching("${it.artist} ${it.cleanTitle.ifBlank { it.title }}")
-        }
-        recs.map { rec ->
-            val match = savedMap[rec.id]
-                ?: byNormalized[TitleCleaner.normalizeForMatching("${rec.artist} ${rec.cleanTitle}")]
-            if (match != null) {
-                rec.copy(
-                    id = match.id,
-                    sourceUrl = match.sourceUrl.ifBlank { rec.sourceUrl },
-                    downloadStatus = match.downloadStatus,
-                    downloadProgress = match.downloadProgress,
-                    localUri = match.localUri,
-                    localFilePath = match.localFilePath,
-                    hdCoverUrl = rec.hdCoverUrl.ifBlank { match.hdCoverUrl }
-                )
-            } else rec
-        }
+        savedIndex
+    ) { recs, index ->
+        recs.map { rec -> index.syncKeepingSource(rec) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val artistState: StateFlow<ArtistUiState?> = combine(
@@ -161,8 +195,8 @@ class MareaViewModel(
         downloadedTracks,
         _rawArtistRecs,
         _isLoadingArtistRecs,
-        allSavedTracksMap
-    ) { artistName, downloaded, rawRecs, loadingRecs, savedMap ->
+        savedIndex
+    ) { artistName, downloaded, rawRecs, loadingRecs, index ->
         if (artistName.isNullOrBlank()) return@combine null
 
         val downloadedOfArtist = downloaded.filter { track ->
@@ -172,24 +206,7 @@ class MareaViewModel(
                 candidateTitle = track.title
             )
         }
-        val byNormalized = savedMap.values.associateBy {
-            TitleCleaner.normalizeForMatching("${it.artist} ${it.cleanTitle.ifBlank { it.title }}")
-        }
-        val syncedRecs = rawRecs.map { rec ->
-            val match = savedMap[rec.id]
-                ?: byNormalized[TitleCleaner.normalizeForMatching("${rec.artist} ${rec.cleanTitle}")]
-            if (match != null) {
-                rec.copy(
-                    id = match.id,
-                    sourceUrl = match.sourceUrl.ifBlank { rec.sourceUrl },
-                    downloadStatus = match.downloadStatus,
-                    downloadProgress = match.downloadProgress,
-                    localUri = match.localUri,
-                    localFilePath = match.localFilePath,
-                    hdCoverUrl = rec.hdCoverUrl.ifBlank { match.hdCoverUrl }
-                )
-            } else rec
-        }
+        val syncedRecs = rawRecs.map { rec -> index.syncKeepingSource(rec) }
 
         ArtistUiState(
             artistName = artistName,
@@ -324,33 +341,11 @@ class MareaViewModel(
 
     val mergedSearchState: StateFlow<SearchUiState> = combine(
         _searchState,
-        allSavedTracksMap
-    ) { state, savedMap ->
-        val mergedResults = state.results.map { track ->
-            savedMap[track.id]?.let { saved ->
-                track.copy(
-                    downloadStatus = saved.downloadStatus,
-                    downloadProgress = saved.downloadProgress,
-                    localUri = saved.localUri,
-                    localFilePath = saved.localFilePath,
-                    hdCoverUrl = saved.hdCoverUrl.ifBlank { track.hdCoverUrl }
-                )
-            } ?: track
-        }
+        savedIndex
+    ) { state, index ->
+        val mergedResults = state.results.map { track -> index.sync(track) }
         val mergedPlaylist = state.playlistPreview?.let { pl ->
-            pl.copy(
-                tracks = pl.tracks.map { track ->
-                    savedMap[track.id]?.let { saved ->
-                        track.copy(
-                            downloadStatus = saved.downloadStatus,
-                            downloadProgress = saved.downloadProgress,
-                            localUri = saved.localUri,
-                            localFilePath = saved.localFilePath,
-                            hdCoverUrl = saved.hdCoverUrl.ifBlank { track.hdCoverUrl }
-                        )
-                    } ?: track
-                }
-            )
+            pl.copy(tracks = pl.tracks.map { track -> index.sync(track) })
         }
         state.copy(results = mergedResults, playlistPreview = mergedPlaylist)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchUiState())
@@ -540,7 +535,7 @@ class MareaViewModel(
     }
 
     fun downloadSingleTrack(track: TrackItem) {
-        val current = allSavedTracksMap.value[track.id] ?: track
+        val current = savedIndex.value.sync(track)
         if (current.downloadStatus == DownloadStatus.COMPLETED ||
             current.downloadStatus == DownloadStatus.QUEUED ||
             current.downloadStatus == DownloadStatus.DOWNLOADING ||
@@ -550,7 +545,10 @@ class MareaViewModel(
         }
         if (!canDownload()) return
 
+        // La animación de descarga aparece al instante, aunque todavía se busque la fuente.
+        _resolvingIds.update { it + current.id }
         viewModelScope.launch {
+          try {
             val resolved = if (current.sourceUrl.isBlank()) {
                 val ytMatch = runCatching {
                     container.extractorRepo.searchMusic(
@@ -579,10 +577,16 @@ class MareaViewModel(
                 current
             }
 
+            if (resolved.id != current.id) {
+                _resolvedIds.update { it + (current.id to resolved.id) }
+            }
             if ((allSavedTracksMap.value[resolved.id]?.downloadStatus) == DownloadStatus.COMPLETED) {
                 return@launch
             }
             container.downloadOrchestrator.enqueueSingleTrack(resolved)
+          } finally {
+            _resolvingIds.update { it - current.id }
+          }
         }
     }
 
@@ -756,7 +760,20 @@ class MareaViewModel(
         _uiMessage.value = null
     }
 
+    /** Igual que sync, pero si ya existe en la biblioteca usa su id y fuente (para recomendaciones). */
+    private fun SavedIndex.syncKeepingSource(rec: TrackItem): TrackItem {
+        val match = match(rec)?.takeIf { it.downloadStatus != DownloadStatus.NONE }
+            ?: return sync(rec)
+        return sync(rec).copy(
+            id = match.id,
+            sourceUrl = match.sourceUrl.ifBlank { rec.sourceUrl }
+        )
+    }
+
     companion object {
+        private fun normalizedKey(track: TrackItem): String =
+            TitleCleaner.normalizeForMatching("${track.artist} ${track.cleanTitle.ifBlank { track.title }}")
+
         const val PREMIUM_DOWNLOAD_MESSAGE =
             "Las descargas son de Premium. Activa tu plan en Cuenta para escuchar sin conexión."
 

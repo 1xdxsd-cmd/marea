@@ -14,7 +14,11 @@ import com.marea.music.core.image.ImageQualityEvaluator
 import com.marea.music.core.network.OkHttpDownloader
 import com.marea.music.domain.model.DownloadStatus
 import com.marea.music.domain.model.EnrichedMetadata
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -46,15 +50,26 @@ class DownloadWorker(
         val sourceUrl = inputData.getString(KEY_SOURCE_URL) ?: return Result.failure()
         val fallbackThumb = inputData.getString(KEY_THUMB_URL).orEmpty()
 
-        val app = applicationContext as MareaApp
-        val container = app.container
-        val dao = container.database.mareaDao()
+        val notificationId = abs(trackId.hashCode()).coerceAtLeast(1000)
 
+        // Solo unas pocas descargas a la vez: con muchas en paralelo el teléfono se trababa.
+        // Las demás esperan aquí en estado "en cola".
+        return DOWNLOAD_SLOTS.withPermit { runDownload(trackId, rawTitle, rawArtist, sourceUrl, fallbackThumb, notificationId) }
+    }
+
+    private suspend fun runDownload(
+        trackId: String,
+        rawTitle: String,
+        rawArtist: String,
+        sourceUrl: String,
+        fallbackThumb: String,
+        notificationId: Int
+    ): Result {
+        val container = (applicationContext as MareaApp).container
+        val dao = container.database.mareaDao()
         if (dao.getTrackById(trackId)?.downloadStatus == DownloadStatus.COMPLETED.name) {
             return Result.success()
         }
-
-        val notificationId = abs(trackId.hashCode()).coerceAtLeast(1000)
 
         setForeground(createForegroundInfo(notificationId, rawTitle, 0))
 
@@ -139,6 +154,15 @@ class DownloadWorker(
             )
 
             Result.success()
+        } catch (e: CancellationException) {
+            // El sistema detuvo la tarea (o el usuario la canceló): WorkManager la reintenta,
+            // así que vuelve a "en cola" en vez de marcarse como fallida.
+            withContext(NonCancellable) {
+                if (dao.getTrackById(trackId)?.downloadStatus != DownloadStatus.COMPLETED.name) {
+                    dao.updateDownloadState(trackId, DownloadStatus.QUEUED.name, 0)
+                }
+            }
+            throw e
         } catch (e: Exception) {
             dao.updateDownloadState(trackId, DownloadStatus.FAILED.name, 0)
             Result.failure()
@@ -379,6 +403,10 @@ class DownloadWorker(
         const val KEY_ARTIST = "artist"
         const val KEY_SOURCE_URL = "source_url"
         const val KEY_THUMB_URL = "thumb_url"
+
+        /** Descargas simultáneas como máximo (el resto espera en cola). */
+        const val MAX_PARALLEL_DOWNLOADS = 2
+        private val DOWNLOAD_SLOTS = Semaphore(MAX_PARALLEL_DOWNLOADS)
 
         private const val CHUNK_SIZE_BYTES = 256L * 1024L
         private const val PARALLEL_WORKERS = 6
