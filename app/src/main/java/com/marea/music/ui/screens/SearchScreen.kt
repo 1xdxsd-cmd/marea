@@ -55,7 +55,13 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.marea.music.domain.model.PlaylistResult
 import com.marea.music.domain.model.TrackItem
+import com.marea.music.ui.components.GlassSectionTitle
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import com.marea.music.ui.SearchUiState
 import com.marea.music.ui.components.CoverArt
 import com.marea.music.ui.components.GlassCard
@@ -89,7 +95,8 @@ fun SearchScreen(
     onTogglePlaylistSelection: (String) -> Unit,
     onSelectAllPlaylist: (Boolean) -> Unit,
     onDownloadSelectedPlaylist: () -> Unit,
-    onClearPlaylist: () -> Unit
+    onClearPlaylist: () -> Unit,
+    onOpenPlaylist: (PlaylistResult) -> Unit = {}
 ) {
     val clipboard = LocalClipboardManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -322,7 +329,7 @@ fun SearchScreen(
                 }
             }
         } else {
-            if (state.results.isEmpty() && state.error == null) {
+            if (state.results.isEmpty() && state.playlists.isEmpty() && state.error == null) {
                 GlassCard(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -351,11 +358,17 @@ fun SearchScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 120.dp)
             ) {
+                if (state.playlists.isNotEmpty()) {
+                    item(key = "playlists_row", contentType = "playlists_row") {
+                        SearchPlaylistsRow(playlists = state.playlists, onOpen = onOpenPlaylist)
+                    }
+                }
                 items(state.results, key = { it.id }, contentType = { "track" }) { track ->
                     TrackRow(
                         track = track,
                         isPlaying = track.id == currentTrackId,
-                        onClick = { onPlayTrack(track, state.results) },
+                        // Suena esta canción y después siguen parecidas (no otras versiones de la búsqueda).
+                        onClick = { onPlayTrack(track, listOf(track)) },
                         onDownloadClick = { onDownloadSingle(track) },
                         onArtistClick = onArtistClick,
                         onAddToPlaylist = { onAddToPlaylist(track) },
@@ -364,5 +377,64 @@ fun SearchScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SearchPlaylistsRow(
+    playlists: List<PlaylistResult>,
+    onOpen: (PlaylistResult) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        GlassSectionTitle(
+            title = "Playlists",
+            modifier = Modifier.padding(start = 18.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(playlists, key = { it.url }, contentType = { "playlist" }) { pl ->
+                Column(
+                    modifier = Modifier
+                        .width(150.dp)
+                        .glass(RoundedCornerShape(20.dp))
+                        .clickable { onOpen(pl) }
+                        .padding(10.dp)
+                ) {
+                    CoverArt(
+                        url = pl.thumbnailUrl,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        requestSize = 300,
+                        fallback = Icons.AutoMirrored.Rounded.PlaylistPlay
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = pl.title,
+                        color = MareaText,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    val meta = buildList {
+                        if (pl.author.isNotBlank()) add(pl.author)
+                        if (pl.trackCount > 0) add(if (pl.trackCount == 1L) "1 canción" else "${pl.trackCount} canciones")
+                    }.joinToString(" · ")
+                    if (meta.isNotBlank()) {
+                        Text(
+                            text = meta,
+                            color = MareaTextSecondary,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
     }
 }

@@ -232,7 +232,8 @@ class MainActivity : ComponentActivity() {
                                     onTogglePlaylistSelection = viewModel::togglePlaylistSelection,
                                     onSelectAllPlaylist = viewModel::selectAllPlaylistTracks,
                                     onDownloadSelectedPlaylist = viewModel::downloadSelectedPlaylist,
-                                    onClearPlaylist = viewModel::clearPlaylistPreview
+                                    onClearPlaylist = viewModel::clearPlaylistPreview,
+                                    onOpenPlaylist = viewModel::openSearchPlaylist
                                 )
 
                                 2 -> LibraryScreen(

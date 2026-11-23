@@ -64,6 +64,12 @@ import androidx.compose.ui.unit.sp
 import com.marea.music.data.metadata.LrcParser
 import com.marea.music.domain.model.LyricsResult
 import com.marea.music.domain.model.TrackItem
+import com.marea.music.player.VolumeBoostManager
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.marea.music.player.PlaybackUiState
 import com.marea.music.player.RepeatMode
 import com.marea.music.ui.theme.MareaAccent
@@ -303,12 +309,62 @@ private fun PlayerTopBar(
                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
             )
         }
+        val boostDb by VolumeBoostManager.boostDb.collectAsState()
+        var showVolume by remember { mutableStateOf(false) }
+        GlassIconButton(
+            icon = Icons.AutoMirrored.Rounded.VolumeUp,
+            contentDescription = "Subir volumen",
+            onClick = { showVolume = true },
+            tint = if (boostDb > 0) MareaAccent else MareaCyan
+        )
+        Spacer(Modifier.width(8.dp))
         GlassIconButton(
             icon = Icons.Rounded.GraphicEq,
             contentDescription = "Ecualizador",
             onClick = onOpenEqualizer,
             tint = MareaCyan
         )
+        if (showVolume) {
+            VolumeBoostDialog(current = boostDb, onDismiss = { showVolume = false })
+        }
+    }
+}
+
+/** Sube el volumen por encima del máximo del teléfono para canciones que suenan bajito. */
+@Composable
+private fun VolumeBoostDialog(current: Int, onDismiss: () -> Unit) {
+    GlassDialog(onDismiss = onDismiss) {
+        Text(
+            "Subir volumen",
+            color = MareaText,
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold)
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Para canciones que se escuchan muy bajito. Se aplica a todas las canciones hasta que lo regreses a Normal.",
+            color = MareaTextSecondary,
+            style = MaterialTheme.typography.bodySmall
+        )
+        Spacer(Modifier.height(16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            VolumeBoostManager.LEVELS_DB.forEach { db ->
+                GlassChip(
+                    text = if (db == 0) "Normal" else "+$db dB",
+                    selected = current == db,
+                    onClick = { VolumeBoostManager.setBoost(db) }
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "En niveles altos algunas canciones pueden distorsionar.",
+            color = MareaTextSecondary,
+            style = MaterialTheme.typography.labelSmall
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = onDismiss) { Text("Listo", color = MareaCyan, fontWeight = FontWeight.Bold) }
+        }
     }
 }
 

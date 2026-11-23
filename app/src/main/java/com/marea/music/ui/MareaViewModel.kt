@@ -16,6 +16,7 @@ import com.marea.music.domain.model.DownloadStatus
 import com.marea.music.domain.model.LocalPlaylist
 import com.marea.music.domain.model.LyricsResult
 import com.marea.music.domain.model.PlaylistPreview
+import com.marea.music.domain.model.PlaylistResult
 import com.marea.music.domain.model.TrackItem
 import com.marea.music.player.PlaybackUiState
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +40,8 @@ data class SearchUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val results: List<TrackItem> = emptyList(),
+    /** Playlists de YouTube que coinciden con la búsqueda. */
+    val playlists: List<PlaylistResult> = emptyList(),
     val playlistPreview: PlaylistPreview? = null,
     val selectedPlaylistIds: Set<String> = emptySet(),
     val infoMessage: String? = null
@@ -395,6 +398,7 @@ class MareaViewModel(
                                 isLoading = false,
                                 playlistPreview = preview,
                                 results = emptyList(),
+                                playlists = emptyList(),
                                 selectedPlaylistIds = selectableIds
                             )
                         }
@@ -408,6 +412,7 @@ class MareaViewModel(
                             it.copy(
                                 isLoading = false,
                                 results = listOf(track),
+                                playlists = emptyList(),
                                 playlistPreview = null
                             )
                         }
@@ -415,6 +420,10 @@ class MareaViewModel(
                     }
 
                     is ParsedYouTubeInput.SearchQuery -> {
+                        val playlistsAsync = async {
+                            runCatching { container.extractorRepo.searchPlaylists(parsed.query) }
+                                .getOrDefault(emptyList())
+                        }
                         val results = container.extractorRepo.searchMusic(
                             query = parsed.query,
                             originalsOnly = originalsOnly
@@ -424,8 +433,15 @@ class MareaViewModel(
                             it.copy(
                                 isLoading = false,
                                 results = results,
+                                playlists = emptyList(),
                                 playlistPreview = null
                             )
+                        }
+                        launch {
+                            val found = playlistsAsync.await()
+                            if (generation == searchGeneration) {
+                                _searchState.update { it.copy(playlists = found) }
+                            }
                         }
                         enrichTopCoversAsync(results.take(8), isPlaylist = false, generation = generation)
                         prefetchTopSearchStreamsAsync(results.take(3))
@@ -613,6 +629,40 @@ class MareaViewModel(
         }
     }
 
+    /** Abre una playlist encontrada en la búsqueda; al cerrarla vuelves a los resultados. */
+    fun openSearchPlaylist(playlist: PlaylistResult) {
+        searchJob?.cancel()
+        enrichJob?.cancel()
+        val generation = ++searchGeneration
+        _searchState.update { it.copy(isLoading = true, error = null, infoMessage = null) }
+        searchJob = viewModelScope.launch {
+            try {
+                val preview = container.extractorRepo.extractPlaylist(playlist.url)
+                if (generation != searchGeneration) return@launch
+                val savedMap = allSavedTracksMap.value
+                val selectableIds = preview.tracks
+                    .filter { savedMap[it.id]?.isDownloaded != true }
+                    .map { it.id }
+                    .toSet()
+                _searchState.update {
+                    it.copy(
+                        isLoading = false,
+                        playlistPreview = preview,
+                        selectedPlaylistIds = selectableIds
+                    )
+                }
+                enrichTopCoversAsync(preview.tracks.take(10), isPlaylist = true, generation = generation)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (generation != searchGeneration) return@launch
+                _searchState.update {
+                    it.copy(isLoading = false, error = e.message ?: "No se pudo abrir la playlist")
+                }
+            }
+        }
+    }
+
     fun clearPlaylistPreview() {
         _searchState.update { it.copy(playlistPreview = null, infoMessage = null) }
     }
@@ -724,8 +774,11 @@ class MareaViewModel(
     // --- Playback Controls (Sequential / Shuffle / Repeat) ---
 
     fun playTrack(track: TrackItem, queue: List<TrackItem> = listOf(track)) {
-        val synced = allSavedTracksMap.value[track.id] ?: track
-        val syncedQueue = queue.map { allSavedTracksMap.value[it.id] ?: it }
+        // Usa el archivo descargado aunque la canción venga con otro id (búsqueda, radio...).
+        val index = savedIndex.value
+        val saved = allSavedTracksMap.value
+        val synced = index.sync(saved[track.id] ?: track)
+        val syncedQueue = queue.map { index.sync(saved[it.id] ?: it) }
         container.playerController.playTrack(synced, syncedQueue)
     }
 

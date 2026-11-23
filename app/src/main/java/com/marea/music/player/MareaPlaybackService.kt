@@ -67,9 +67,11 @@ class MareaPlaybackService : MediaSessionService() {
 
         // Ecualizador (Premium) sobre la sesión de audio del reproductor.
         EqualizerManager.attach(this, player.audioSessionId)
+        VolumeBoostManager.attach(this, player.audioSessionId)
         player.addAnalyticsListener(object : AnalyticsListener {
             override fun onAudioSessionIdChanged(eventTime: AnalyticsListener.EventTime, audioSessionId: Int) {
                 EqualizerManager.attach(this@MareaPlaybackService, audioSessionId)
+                VolumeBoostManager.attach(this@MareaPlaybackService, audioSessionId)
             }
         })
 
@@ -119,6 +121,7 @@ class MareaPlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         EqualizerManager.release()
+        VolumeBoostManager.release()
         mediaSession?.run {
             player.release()
             release()

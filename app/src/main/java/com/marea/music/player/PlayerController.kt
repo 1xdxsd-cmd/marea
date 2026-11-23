@@ -50,7 +50,8 @@ data class PlaybackUiState(
 class PlayerController(
     private val context: Context,
     private val extractorRepo: YouTubeExtractorRepository,
-    private val history: ListeningHistory? = null
+    private val history: ListeningHistory? = null,
+    private val radioQueue: RadioQueue? = null
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -63,6 +64,9 @@ class PlayerController(
     private var currentIndex: Int = -1
     private var playJob: Job? = null
     private var prefetchJob: Job? = null
+    private var radioJob: Job? = null
+    private var errorSkipJob: Job? = null
+    private var consecutiveErrors = 0
 
     // ---- Plan gratis: anuncios y límite de saltos ----
     private val freePrefs = context.getSharedPreferences(FREE_PREFS, Context.MODE_PRIVATE)
@@ -74,6 +78,7 @@ class PlayerController(
 
     init {
         EqualizerManager.init(context)
+        VolumeBoostManager.init(context)
         connectController()
         startProgressTicker()
     }
@@ -116,6 +121,7 @@ class PlayerController(
                                 errorMessage = error.localizedMessage ?: "Error al reproducir el audio"
                             )
                         }
+                        skipAfterError()
                     }
                 })
             }
@@ -212,7 +218,8 @@ class PlayerController(
                     currentIndex += 1
                     playAtIndex(currentIndex)
                 } else {
-                    _uiState.update { it.copy(isPlaying = false, positionMs = 0L) }
+                    // Fin de la cola: sigue con canciones parecidas (radio).
+                    continueWithRadio(fromIndex = currentIndex)
                 }
             }
         }
@@ -222,7 +229,12 @@ class PlayerController(
         if (activeQueue.isEmpty()) return
         if (blockedByAd()) return
         val hasNext = currentIndex + 1 < activeQueue.size || _uiState.value.repeatMode == RepeatMode.ALL
-        if (!hasNext) return
+        if (!hasNext) {
+            if (radioQueue == null) return
+            if (!consumeFreeSkip()) return
+            continueWithRadio(fromIndex = currentIndex)
+            return
+        }
         if (!consumeFreeSkip()) return
         if (currentIndex + 1 < activeQueue.size) {
             currentIndex += 1
@@ -418,8 +430,12 @@ class PlayerController(
                 controller.prepare()
                 controller.play()
                 history?.record(track)
+                consecutiveErrors = 0
 
                 prefetchNextTrack()
+                extendWithRadioIfNeeded()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -427,6 +443,80 @@ class PlayerController(
                         errorMessage = e.message ?: "No se pudo reproducir la canción"
                     )
                 }
+                skipAfterError()
+            }
+        }
+    }
+
+    // ---------- Radio: seguir con canciones parecidas ----------
+
+    /** Cuando quedan pocas canciones en la cola, agrega parecidas en segundo plano. */
+    private fun extendWithRadioIfNeeded() {
+        val radio = radioQueue ?: return
+        if (_uiState.value.repeatMode != RepeatMode.OFF) return
+        if (currentIndex < activeQueue.size - 2) return
+        if (radioJob?.isActive == true) return
+        val seed = activeQueue.getOrNull(currentIndex) ?: return
+        radioJob = scope.launch {
+            val added = runCatching { radio.similarTo(seed, activeQueue) }.getOrDefault(emptyList())
+            if (added.isNotEmpty()) appendToQueue(added)
+        }
+    }
+
+    private fun appendToQueue(tracks: List<TrackItem>) {
+        val ids = activeQueue.map { it.id }.toHashSet()
+        val fresh = tracks.filter { ids.add(it.id) }
+        if (fresh.isEmpty()) return
+        activeQueue = activeQueue + fresh
+        originalQueue = originalQueue + fresh
+        _uiState.update { it.copy(queue = activeQueue) }
+        prefetchNextTrack()
+    }
+
+    /** Se acabó la cola: espera (o pide) las parecidas y sigue sonando. */
+    private fun continueWithRadio(fromIndex: Int) {
+        val radio = radioQueue
+        if (radio == null) {
+            _uiState.update { it.copy(isPlaying = false, positionMs = 0L) }
+            return
+        }
+        val seed = activeQueue.getOrNull(fromIndex)
+        scope.launch {
+            _uiState.update { it.copy(isBuffering = true) }
+            radioJob?.join()
+            if (fromIndex + 1 >= activeQueue.size && seed != null) {
+                val added = runCatching { radio.similarTo(seed, activeQueue) }.getOrDefault(emptyList())
+                appendToQueue(added)
+            }
+            if (currentIndex != fromIndex) return@launch
+            if (fromIndex + 1 < activeQueue.size) {
+                currentIndex = fromIndex + 1
+                playAtIndex(currentIndex)
+            } else {
+                _uiState.update { it.copy(isPlaying = false, isBuffering = false, positionMs = 0L) }
+            }
+        }
+    }
+
+    /** Si una canción no se puede reproducir, pasa a la siguiente (máximo 3 seguidas). */
+    private fun skipAfterError() {
+        consecutiveErrors += 1
+        if (consecutiveErrors > MAX_CONSECUTIVE_ERRORS) return
+        val failedIndex = currentIndex
+        errorSkipJob?.cancel()
+        errorSkipJob = scope.launch {
+            delay(1_500L)
+            if (currentIndex != failedIndex || _uiState.value.isAd) return@launch
+            when {
+                failedIndex + 1 < activeQueue.size -> {
+                    currentIndex = failedIndex + 1
+                    playAtIndex(currentIndex)
+                }
+                _uiState.value.repeatMode == RepeatMode.ALL && activeQueue.size > 1 -> {
+                    currentIndex = 0
+                    playAtIndex(currentIndex)
+                }
+                else -> continueWithRadio(fromIndex = failedIndex)
             }
         }
     }
@@ -499,6 +589,9 @@ class PlayerController(
 
         /** Plan gratis: un anuncio cada tantas canciones. */
         const val SONGS_BETWEEN_ADS = 3
+
+        /** Canciones con error seguidas que se saltan solas antes de detenerse. */
+        const val MAX_CONSECUTIVE_ERRORS = 3
 
         val AD_RESOURCES = intArrayOf(
             R.raw.marea_ad_1,

@@ -2,12 +2,14 @@ package com.marea.music.data.extractor
 
 import com.marea.music.data.metadata.TitleCleaner
 import com.marea.music.domain.model.PlaylistPreview
+import com.marea.music.domain.model.PlaylistResult
 import com.marea.music.domain.model.TrackItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.MediaFormat
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.playlist.PlaylistInfo
+import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
@@ -64,6 +66,31 @@ class YouTubeExtractorRepository {
         }
 
         rankByQueryRelevance(query, filtered)
+    }
+
+    /** Playlists de YouTube Music que coinciden con la búsqueda (si no hay, playlists normales). */
+    suspend fun searchPlaylists(query: String, limit: Int = 12): List<PlaylistResult> = withContext(Dispatchers.IO) {
+        val ytService = ServiceList.YouTube
+        fun fetch(filter: String): List<PlaylistInfoItem> = runCatching {
+            val extractor = ytService.getSearchExtractor(query, listOf(filter), "")
+            extractor.fetchPage()
+            extractor.initialPage.items.filterIsInstance<PlaylistInfoItem>()
+        }.getOrDefault(emptyList())
+
+        val items = fetch("music_playlists").ifEmpty { fetch("playlists") }
+        items.mapNotNull { item ->
+            val listId = Regex("[?&]list=([a-zA-Z0-9_-]+)").find(item.url.orEmpty())
+                ?.groupValues?.getOrNull(1) ?: return@mapNotNull null
+            PlaylistResult(
+                title = item.name.orEmpty().ifBlank { "Playlist" },
+                author = TitleCleaner.cleanArtist(item.uploaderName.orEmpty()),
+                url = "https://www.youtube.com/playlist?list=$listId",
+                thumbnailUrl = pickBestThumbnail(
+                    item.thumbnails.maxByOrNull { it.width * it.height }?.url.orEmpty()
+                ),
+                trackCount = item.streamCount
+            )
+        }.distinctBy { it.url }.take(limit)
     }
 
     suspend fun getTrackInfo(videoUrl: String): TrackItem = withContext(Dispatchers.IO) {

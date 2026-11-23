@@ -41,6 +41,15 @@ data class PlaylistPreview(
     val tracks: List<TrackItem>
 )
 
+/** Una playlist de YouTube que aparece al buscar. */
+data class PlaylistResult(
+    val title: String,
+    val author: String,
+    val url: String,
+    val thumbnailUrl: String,
+    val trackCount: Long
+)
+
 data class LocalPlaylist(
     val id: Long,
     val name: String,

@@ -153,6 +153,12 @@ class DownloadWorker(
                 localUri = saved.localUri
             )
 
+            // Guarda la letra para verla sin internet (si no hay, no pasa nada).
+            runCatching { container.lyricsRepository.fetchLyrics(enriched.artist, enriched.title) }
+            if (enriched.title != rawTitle || enriched.artist != rawArtist) {
+                runCatching { container.lyricsRepository.fetchLyrics(rawArtist, rawTitle) }
+            }
+
             Result.success()
         } catch (e: CancellationException) {
             // El sistema detuvo la tarea (o el usuario la canceló): WorkManager la reintenta,
