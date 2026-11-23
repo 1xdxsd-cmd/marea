@@ -48,9 +48,9 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.pego.music.domain.model.DownloadStatus
 import com.pego.music.domain.model.TrackItem
-import com.pego.music.ui.theme.PegoCard
-import com.pego.music.ui.theme.PegoGreen
-import com.pego.music.ui.theme.PegoTextSecondary
+import com.pego.music.ui.theme.MareaCard
+import com.pego.music.ui.theme.MareaAccent
+import com.pego.music.ui.theme.MareaTextSecondary
 
 @Composable
 fun TrackRow(
@@ -91,7 +91,7 @@ fun TrackRow(
             modifier = Modifier
                 .size(54.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(PegoCard),
+                .background(MareaCard),
             contentAlignment = Alignment.Center
         ) {
             if (imageRequest != null) {
@@ -105,7 +105,7 @@ fun TrackRow(
                 Icon(
                     imageVector = Icons.Rounded.MusicNote,
                     contentDescription = null,
-                    tint = PegoTextSecondary
+                    tint = MareaTextSecondary
                 )
             }
         }
@@ -121,7 +121,7 @@ fun TrackRow(
                 style = MaterialTheme.typography.bodyLarge.copy(
                     fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Medium
                 ),
-                color = if (isPlaying) PegoGreen else MaterialTheme.colorScheme.onBackground,
+                color = if (isPlaying) MareaAccent else MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
@@ -137,7 +137,7 @@ fun TrackRow(
             Text(
                 text = artistLabel,
                 style = MaterialTheme.typography.bodySmall,
-                color = PegoTextSecondary,
+                color = MareaTextSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
@@ -177,13 +177,13 @@ fun TrackRow(
                     Icon(
                         imageVector = Icons.Rounded.MoreVert,
                         contentDescription = "Opciones",
-                        tint = PegoTextSecondary
+                        tint = MareaTextSecondary
                     )
                 }
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
-                    modifier = Modifier.background(PegoCard)
+                    modifier = Modifier.background(MareaCard)
                 ) {
                     onAddToPlaylist?.let { action ->
                         DropdownMenuItem(
@@ -274,7 +274,7 @@ fun OneClickDownloadButton(
                 Icon(
                     imageVector = Icons.Rounded.CheckCircle,
                     contentDescription = "Ya descargada",
-                    tint = PegoGreen
+                    tint = MareaAccent
                 )
             }
         }
@@ -290,13 +290,13 @@ fun OneClickDownloadButton(
                     CircularProgressIndicator(
                         progress = { progress / 100f },
                         modifier = Modifier.size(22.dp),
-                        color = PegoGreen,
+                        color = MareaAccent,
                         strokeWidth = 2.5.dp
                     )
                 } else {
                     CircularProgressIndicator(
                         modifier = Modifier.size(22.dp),
-                        color = PegoGreen,
+                        color = MareaAccent,
                         strokeWidth = 2.5.dp
                     )
                 }
@@ -318,7 +318,7 @@ fun OneClickDownloadButton(
                 Icon(
                     imageVector = Icons.Rounded.Download,
                     contentDescription = "Descargar",
-                    tint = PegoTextSecondary
+                    tint = MareaTextSecondary
                 )
             }
         }

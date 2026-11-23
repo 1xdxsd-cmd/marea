@@ -62,9 +62,10 @@ import coil.request.ImageRequest
 import com.pego.music.domain.model.LocalPlaylist
 import com.pego.music.domain.model.TrackItem
 import com.pego.music.ui.components.OneClickDownloadButton
-import com.pego.music.ui.theme.PegoCard
-import com.pego.music.ui.theme.PegoGreen
-import com.pego.music.ui.theme.PegoTextSecondary
+import com.pego.music.ui.theme.MareaCard
+import com.pego.music.ui.theme.MareaAccent
+import com.pego.music.ui.theme.MareaTextSecondary
+import com.pego.music.ui.theme.MareaSurface
 
 @Composable
 fun HomeScreen(
@@ -124,9 +125,9 @@ fun HomeScreen(
                     }
                 ),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = PegoCard,
-                    unfocusedContainerColor = PegoCard,
-                    focusedBorderColor = PegoGreen,
+                    focusedContainerColor = MareaCard,
+                    unfocusedContainerColor = MareaCard,
+                    focusedBorderColor = MareaAccent,
                     unfocusedBorderColor = Color.Transparent
                 ),
                 shape = RoundedCornerShape(12.dp),
@@ -174,7 +175,7 @@ fun HomeScreen(
                     Icon(
                         imageVector = Icons.Rounded.Refresh,
                         contentDescription = "Actualizar",
-                        tint = PegoTextSecondary
+                        tint = MareaTextSecondary
                     )
                 }
             }
@@ -188,7 +189,7 @@ fun HomeScreen(
                         .height(220.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = PegoGreen)
+                    CircularProgressIndicator(color = MareaAccent)
                 }
             }
         } else {
@@ -234,7 +235,7 @@ private fun RecommendedTrackGridCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(PegoCard)
+            .background(MareaCard)
             .clickable(onClick = onPlay)
             .padding(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -245,7 +246,7 @@ private fun RecommendedTrackGridCard(
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF181818)),
+                .background(MareaSurface),
             contentAlignment = Alignment.Center
         ) {
             if (imageRequest != null) {
@@ -259,7 +260,7 @@ private fun RecommendedTrackGridCard(
                 Icon(
                     imageVector = Icons.Rounded.MusicNote,
                     contentDescription = null,
-                    tint = PegoTextSecondary,
+                    tint = MareaTextSecondary,
                     modifier = Modifier.size(40.dp)
                 )
             }
@@ -271,7 +272,7 @@ private fun RecommendedTrackGridCard(
         Text(
             text = track.cleanTitle.ifBlank { track.title },
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = if (isPlaying) PegoGreen else MaterialTheme.colorScheme.onSurface,
+            color = if (isPlaying) MareaAccent else MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
@@ -280,7 +281,7 @@ private fun RecommendedTrackGridCard(
         Text(
             text = track.artist,
             style = MaterialTheme.typography.bodySmall,
-            color = PegoTextSecondary,
+            color = MareaTextSecondary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
@@ -306,7 +307,7 @@ private fun RecommendedTrackGridCard(
                 Icon(
                     imageVector = Icons.Rounded.PlayArrow,
                     contentDescription = "Reproducir",
-                    tint = if (isPlaying) PegoGreen else MaterialTheme.colorScheme.onSurface
+                    tint = if (isPlaying) MareaAccent else MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -317,7 +318,7 @@ private fun RecommendedTrackGridCard(
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.PlaylistAdd,
                     contentDescription = "Agregar a playlist",
-                    tint = PegoTextSecondary
+                    tint = MareaTextSecondary
                 )
             }
 
@@ -359,7 +360,7 @@ private fun PlaylistCompactCard(
             modifier = Modifier
                 .size(124.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(PegoCard),
+                .background(MareaCard),
             contentAlignment = Alignment.Center
         ) {
             if (imageRequest != null) {
@@ -373,7 +374,7 @@ private fun PlaylistCompactCard(
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.PlaylistPlay,
                     contentDescription = null,
-                    tint = PegoTextSecondary,
+                    tint = MareaTextSecondary,
                     modifier = Modifier.size(42.dp)
                 )
             }

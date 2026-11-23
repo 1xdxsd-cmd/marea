@@ -52,11 +52,11 @@ import com.pego.music.ui.screens.AccessGate
 import com.pego.music.ui.screens.HomeScreen
 import com.pego.music.ui.screens.LibraryScreen
 import com.pego.music.ui.screens.SearchScreen
-import com.pego.music.ui.theme.PegoBlack
-import com.pego.music.ui.theme.PegoGreen
-import com.pego.music.ui.theme.PegoSurface
-import com.pego.music.ui.theme.PegoTextSecondary
-import com.pego.music.ui.theme.PegoTheme
+import com.pego.music.ui.theme.MareaBg
+import com.pego.music.ui.theme.MareaAccent
+import com.pego.music.ui.theme.MareaSurface
+import com.pego.music.ui.theme.MareaTextSecondary
+import com.pego.music.ui.theme.MareaTheme
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -85,7 +85,7 @@ class MainActivity : ComponentActivity() {
         val initialSharedUrl = extractUrlFromIntent(intent)
 
         setContent {
-            PegoTheme {
+            MareaTheme {
                 AccessGate(access = container.accessRepository) {
                     var selectedTab by remember {
                         mutableIntStateOf(if (initialSharedUrl != null) 1 else 0)
@@ -133,7 +133,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     Scaffold(
-                        containerColor = PegoBlack,
+                        containerColor = MareaBg,
                         snackbarHost = { SnackbarHost(snackbarHostState) },
                         bottomBar = {
                             Column {
@@ -142,12 +142,12 @@ class MainActivity : ComponentActivity() {
                                     onTogglePlayPause = viewModel::togglePlayPause,
                                     onExpand = { showFullPlayer = true }
                                 )
-                                NavigationBar(containerColor = PegoSurface) {
+                                NavigationBar(containerColor = MareaSurface) {
                                     val navColors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = PegoGreen,
-                                        selectedTextColor = PegoGreen,
-                                        unselectedIconColor = PegoTextSecondary,
-                                        unselectedTextColor = PegoTextSecondary,
+                                        selectedIconColor = MareaAccent,
+                                        selectedTextColor = MareaAccent,
+                                        unselectedIconColor = MareaTextSecondary,
+                                        unselectedTextColor = MareaTextSecondary,
                                         indicatorColor = Color.Transparent
                                     )
                                     NavigationBarItem(

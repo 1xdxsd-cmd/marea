@@ -52,8 +52,9 @@ import coil.compose.AsyncImage
 import com.pego.music.domain.model.LocalPlaylist
 import com.pego.music.domain.model.TrackItem
 import com.pego.music.ui.components.TrackRow
-import com.pego.music.ui.theme.PegoGreen
-import com.pego.music.ui.theme.PegoTextSecondary
+import com.pego.music.ui.theme.MareaAccent
+import com.pego.music.ui.theme.MareaTextSecondary
+import com.pego.music.ui.theme.MareaOnAccent
 
 @Composable
 fun LibraryScreen(
@@ -102,7 +103,7 @@ fun LibraryScreen(
                     Text(
                         text = "${currentOpened.tracks.size} canciones",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PegoTextSecondary
+                        color = MareaTextSecondary
                     )
                 }
                 if (currentOpened.tracks.isNotEmpty()) {
@@ -110,7 +111,7 @@ fun LibraryScreen(
                         Icon(
                             Icons.Rounded.Shuffle,
                             contentDescription = "Aleatorio",
-                            tint = PegoGreen
+                            tint = MareaAccent
                         )
                     }
                     Button(
@@ -118,8 +119,8 @@ fun LibraryScreen(
                             onPlayTrack(currentOpened.tracks.first(), currentOpened.tracks)
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = PegoGreen,
-                            contentColor = Color.Black
+                            containerColor = MareaAccent,
+                            contentColor = MareaOnAccent
                         )
                     ) {
                         Text("Play", fontWeight = FontWeight.Bold)
@@ -174,7 +175,7 @@ fun LibraryScreen(
                 Icon(
                     imageVector = Icons.Rounded.FavoriteBorder,
                     contentDescription = "Apoyar en Ko-fi",
-                    tint = PegoGreen
+                    tint = MareaAccent
                 )
             }
         }
@@ -188,11 +189,11 @@ fun LibraryScreen(
         TabRow(
             selectedTabIndex = selectedTab,
             containerColor = MaterialTheme.colorScheme.background,
-            contentColor = PegoGreen,
+            contentColor = MareaAccent,
             indicator = { tabPositions ->
                 TabRowDefaults.SecondaryIndicator(
                     modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                    color = PegoGreen
+                    color = MareaAccent
                 )
             }
         ) {
@@ -204,7 +205,7 @@ fun LibraryScreen(
                         Text(
                             text = title,
                             maxLines = 1,
-                            color = if (selectedTab == index) PegoGreen else PegoTextSecondary
+                            color = if (selectedTab == index) MareaAccent else MareaTextSecondary
                         )
                     }
                 )
@@ -245,9 +246,9 @@ fun LibraryScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 10.dp)
                     ) {
-                        Icon(Icons.Rounded.Add, contentDescription = null, tint = PegoGreen)
+                        Icon(Icons.Rounded.Add, contentDescription = null, tint = MareaAccent)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Nueva Playlist", color = PegoGreen, fontWeight = FontWeight.SemiBold)
+                        Text("Nueva Playlist", color = MareaAccent, fontWeight = FontWeight.SemiBold)
                     }
 
                     if (playlists.isEmpty()) {
@@ -282,7 +283,7 @@ fun LibraryScreen(
                                             imageVector = Icons.AutoMirrored.Rounded.PlaylistPlay,
                                             contentDescription = null,
                                             modifier = Modifier.size(56.dp),
-                                            tint = PegoTextSecondary
+                                            tint = MareaTextSecondary
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(12.dp))
@@ -296,14 +297,14 @@ fun LibraryScreen(
                                         Text(
                                             text = "${playlist.tracks.size} canciones",
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = PegoTextSecondary
+                                            color = MareaTextSecondary
                                         )
                                     }
                                     IconButton(onClick = { onDeletePlaylist(playlist.id) }) {
                                         Icon(
                                             imageVector = Icons.Rounded.DeleteOutline,
                                             contentDescription = "Eliminar playlist",
-                                            tint = PegoTextSecondary
+                                            tint = MareaTextSecondary
                                         )
                                     }
                                 }
@@ -348,7 +349,7 @@ private fun EmptyState(message: String) {
     ) {
         Text(
             text = message,
-            color = PegoTextSecondary,
+            color = MareaTextSecondary,
             style = MaterialTheme.typography.bodyMedium
         )
     }

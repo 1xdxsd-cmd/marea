@@ -70,10 +70,11 @@ import coil.compose.AsyncImage
 import com.pego.music.domain.model.LocalPlaylist
 import com.pego.music.domain.model.TrackItem
 import com.pego.music.ui.CoverEditorUiState
-import com.pego.music.ui.theme.PegoCard
-import com.pego.music.ui.theme.PegoGreen
-import com.pego.music.ui.theme.PegoSurface
-import com.pego.music.ui.theme.PegoTextSecondary
+import com.pego.music.ui.theme.MareaCard
+import com.pego.music.ui.theme.MareaAccent
+import com.pego.music.ui.theme.MareaSurface
+import com.pego.music.ui.theme.MareaTextSecondary
+import com.pego.music.ui.theme.MareaOnAccent
 import kotlinx.coroutines.delay
 import java.io.File
 
@@ -89,7 +90,7 @@ fun AddToPlaylistDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = PegoSurface,
+        containerColor = MareaSurface,
         title = {
             Text(
                 text = "Agregar a playlist",
@@ -101,7 +102,7 @@ fun AddToPlaylistDialog(
                 Text(
                     text = track.cleanTitle.ifBlank { track.title },
                     style = MaterialTheme.typography.bodySmall,
-                    color = PegoTextSecondary,
+                    color = MareaTextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -124,7 +125,7 @@ fun AddToPlaylistDialog(
                             }
                         }
                     ) {
-                        Icon(Icons.Rounded.Add, contentDescription = "Crear", tint = PegoGreen)
+                        Icon(Icons.Rounded.Add, contentDescription = "Crear", tint = MareaAccent)
                     }
                 }
 
@@ -134,7 +135,7 @@ fun AddToPlaylistDialog(
                     Text(
                         text = "Sin playlists",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PegoTextSecondary
+                        color = MareaTextSecondary
                     )
                 } else {
                     LazyColumn(modifier = Modifier.heightIn(max = 220.dp)) {
@@ -153,7 +154,7 @@ fun AddToPlaylistDialog(
                                 Icon(
                                     Icons.AutoMirrored.Rounded.PlaylistAdd,
                                     contentDescription = null,
-                                    tint = PegoGreen
+                                    tint = MareaAccent
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
@@ -161,7 +162,7 @@ fun AddToPlaylistDialog(
                                     Text(
                                         "${pl.tracks.size} canciones",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = PegoTextSecondary
+                                        color = MareaTextSecondary
                                     )
                                 }
                             }
@@ -172,7 +173,7 @@ fun AddToPlaylistDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cerrar", color = PegoTextSecondary)
+                Text("Cerrar", color = MareaTextSecondary)
             }
         }
     )
@@ -187,7 +188,7 @@ fun CreatePlaylistDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = PegoSurface,
+        containerColor = MareaSurface,
         title = { Text("Nueva Playlist", fontWeight = FontWeight.Bold) },
         text = {
             OutlinedTextField(
@@ -207,8 +208,8 @@ fun CreatePlaylistDialog(
                     }
                 },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = PegoGreen,
-                    contentColor = Color.Black
+                    containerColor = MareaAccent,
+                    contentColor = MareaOnAccent
                 )
             ) {
                 Text("Crear", fontWeight = FontWeight.Bold)
@@ -216,7 +217,7 @@ fun CreatePlaylistDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancelar", color = PegoTextSecondary)
+                Text("Cancelar", color = MareaTextSecondary)
             }
         }
     )
@@ -278,7 +279,7 @@ fun TrimAudioDialog(
 
     AlertDialog(
         onDismissRequest = { if (!isTrimming) onDismiss() },
-        containerColor = PegoSurface,
+        containerColor = MareaSurface,
         title = {
             Text("Recortar canción", fontWeight = FontWeight.Bold)
         },
@@ -305,8 +306,8 @@ fun TrimAudioDialog(
                     valueRange = 0f..safeMax,
                     colors = SliderDefaults.colors(
                         thumbColor = Color.White,
-                        activeTrackColor = PegoGreen,
-                        inactiveTrackColor = PegoCard
+                        activeTrackColor = MareaAccent,
+                        inactiveTrackColor = MareaCard
                     )
                 )
 
@@ -317,7 +318,7 @@ fun TrimAudioDialog(
                     Text(
                         text = "Inicio: ${formatDuration(startMs / 1000L)}",
                         style = MaterialTheme.typography.labelMedium,
-                        color = PegoGreen
+                        color = MareaAccent
                     )
                     Text(
                         text = "Duración: ${formatDuration((endMs - startMs) / 1000L)}",
@@ -326,7 +327,7 @@ fun TrimAudioDialog(
                     Text(
                         text = "Fin: ${formatDuration(endMs / 1000L)}",
                         style = MaterialTheme.typography.labelMedium,
-                        color = PegoTextSecondary
+                        color = MareaTextSecondary
                     )
                 }
 
@@ -356,7 +357,7 @@ fun TrimAudioDialog(
                         Icon(
                             imageVector = if (isPreviewPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                             contentDescription = "Escuchar desde inicio",
-                            tint = PegoGreen,
+                            tint = MareaAccent,
                             modifier = Modifier.size(32.dp)
                         )
                     }
@@ -378,7 +379,7 @@ fun TrimAudioDialog(
                     ) {
                         Text(
                             "Fijar inicio aquí (${formatDuration(previewPosMs / 1000L)})",
-                            color = PegoGreen
+                            color = MareaAccent
                         )
                     }
                 }
@@ -391,7 +392,7 @@ fun TrimAudioDialog(
                 if (isTrimming) {
                     Spacer(modifier = Modifier.height(10.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = PegoGreen)
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MareaAccent)
                         Spacer(modifier = Modifier.width(10.dp))
                         Text("Recortando audio con Media3...", style = MaterialTheme.typography.bodySmall)
                     }
@@ -412,8 +413,8 @@ fun TrimAudioDialog(
                     }
                 },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = PegoGreen,
-                    contentColor = Color.Black
+                    containerColor = MareaAccent,
+                    contentColor = MareaOnAccent
                 )
             ) {
                 Text("Recortar y guardar", fontWeight = FontWeight.Bold)
@@ -421,7 +422,7 @@ fun TrimAudioDialog(
         },
         dismissButton = {
             TextButton(enabled = !isTrimming, onClick = onDismiss) {
-                Text("Cancelar", color = PegoTextSecondary)
+                Text("Cancelar", color = MareaTextSecondary)
             }
         }
     )
@@ -454,11 +455,11 @@ fun EditCoverDialog(
 
     AlertDialog(
         onDismissRequest = { if (!state.isApplying) onDismiss() },
-        containerColor = PegoSurface,
+        containerColor = MareaSurface,
         title = { Text("Cambiar portada", fontWeight = FontWeight.Bold) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
-                TabRow(selectedTabIndex = selectedTab, containerColor = PegoSurface, contentColor = PegoGreen) {
+                TabRow(selectedTabIndex = selectedTab, containerColor = MareaSurface, contentColor = MareaAccent) {
                     Tab(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
@@ -483,7 +484,7 @@ fun EditCoverDialog(
                             modifier = Modifier.weight(1f)
                         )
                         IconButton(onClick = { onSearchInternet(query) }) {
-                            Icon(Icons.Rounded.Search, contentDescription = "Buscar", tint = PegoGreen)
+                            Icon(Icons.Rounded.Search, contentDescription = "Buscar", tint = MareaAccent)
                         }
                     }
 
@@ -502,7 +503,7 @@ fun EditCoverDialog(
                             enabled = directUrl.startsWith("http") && !state.isApplying,
                             onClick = { onApplyUrl(directUrl.trim()) }
                         ) {
-                            Text("Usar", color = PegoGreen)
+                            Text("Usar", color = MareaAccent)
                         }
                     }
 
@@ -515,7 +516,7 @@ fun EditCoverDialog(
                                 .height(160.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(color = PegoGreen)
+                            CircularProgressIndicator(color = MareaAccent)
                         }
                     } else {
                         LazyVerticalGrid(
@@ -531,7 +532,7 @@ fun EditCoverDialog(
                                 Column(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(10.dp))
-                                        .background(PegoCard)
+                                        .background(MareaCard)
                                         .clickable(enabled = !state.isApplying) {
                                             onApplyUrl(eval.candidate.imageUrl)
                                         }
@@ -553,7 +554,7 @@ fun EditCoverDialog(
                                     Text(
                                         text = "${eval.candidate.source} • $psnrLabel",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = PegoGreen,
+                                        color = MareaAccent,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -576,8 +577,8 @@ fun EditCoverDialog(
                                 )
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = PegoGreen,
-                                contentColor = Color.Black
+                                containerColor = MareaAccent,
+                                contentColor = MareaOnAccent
                             )
                         ) {
                             Icon(Icons.Rounded.PhotoLibrary, contentDescription = null)
@@ -590,7 +591,7 @@ fun EditCoverDialog(
                 if (state.isApplying) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), color = PegoGreen)
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MareaAccent)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Verificando PSNR e incrustando...", style = MaterialTheme.typography.bodySmall)
                     }
@@ -598,7 +599,7 @@ fun EditCoverDialog(
 
                 state.statusMessage?.let { msg ->
                     Spacer(modifier = Modifier.height(6.dp))
-                    Text(msg, color = PegoGreen, style = MaterialTheme.typography.bodySmall)
+                    Text(msg, color = MareaAccent, style = MaterialTheme.typography.bodySmall)
                 }
 
                 state.errorMessage?.let { err ->
@@ -609,7 +610,7 @@ fun EditCoverDialog(
         },
         confirmButton = {
             TextButton(enabled = !state.isApplying, onClick = onDismiss) {
-                Text("Cerrar", color = PegoTextSecondary)
+                Text("Cerrar", color = MareaTextSecondary)
             }
         }
     )

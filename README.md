@@ -1,4 +1,4 @@
-# PEGO
+# Marea
 
 Reproductor de audio y gestor de biblioteca musical open-source para Android, construido en **Kotlin + Jetpack Compose** con **Jetpack Media3**.
 

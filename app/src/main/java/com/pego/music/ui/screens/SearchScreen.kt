@@ -55,9 +55,10 @@ import coil.compose.AsyncImage
 import com.pego.music.domain.model.TrackItem
 import com.pego.music.ui.SearchUiState
 import com.pego.music.ui.components.TrackRow
-import com.pego.music.ui.theme.PegoCard
-import com.pego.music.ui.theme.PegoGreen
-import com.pego.music.ui.theme.PegoTextSecondary
+import com.pego.music.ui.theme.MareaCard
+import com.pego.music.ui.theme.MareaAccent
+import com.pego.music.ui.theme.MareaTextSecondary
+import com.pego.music.ui.theme.MareaOnAccent
 
 @Composable
 fun SearchScreen(
@@ -116,9 +117,9 @@ fun SearchScreen(
                     }
                 ),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = PegoCard,
-                    unfocusedContainerColor = PegoCard,
-                    focusedBorderColor = PegoGreen,
+                    focusedContainerColor = MareaCard,
+                    unfocusedContainerColor = MareaCard,
+                    focusedBorderColor = MareaAccent,
                     unfocusedBorderColor = Color.Transparent
                 ),
                 shape = RoundedCornerShape(12.dp),
@@ -133,8 +134,8 @@ fun SearchScreen(
                     onClick = { onOriginalsFilterChange(true) },
                     label = { Text("Solo Originales") },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = PegoGreen,
-                        selectedLabelColor = Color.Black
+                        selectedContainerColor = MareaAccent,
+                        selectedLabelColor = MareaOnAccent
                     )
                 )
                 FilterChip(
@@ -142,8 +143,8 @@ fun SearchScreen(
                     onClick = { onOriginalsFilterChange(false) },
                     label = { Text("Todo") },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = PegoGreen,
-                        selectedLabelColor = Color.Black
+                        selectedContainerColor = MareaAccent,
+                        selectedLabelColor = MareaOnAccent
                     )
                 )
             }
@@ -154,7 +155,7 @@ fun SearchScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = PegoGreen)
+                CircularProgressIndicator(color = MareaAccent)
             }
             return
         }
@@ -177,7 +178,7 @@ fun SearchScreen(
 
         state.infoMessage?.let { msg ->
             Surface(
-                color = PegoGreen.copy(alpha = 0.18f),
+                color = MareaAccent.copy(alpha = 0.18f),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -185,7 +186,7 @@ fun SearchScreen(
             ) {
                 Text(
                     text = msg,
-                    color = PegoGreen,
+                    color = MareaAccent,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(14.dp)
                 )
@@ -204,7 +205,7 @@ fun SearchScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(PegoCard)
+                            .background(MareaCard)
                             .padding(16.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -229,7 +230,7 @@ fun SearchScreen(
                                 Text(
                                     text = "${playlist.author} • ${playlist.tracks.size}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = PegoTextSecondary
+                                    color = MareaTextSecondary
                                 )
                             }
                         }
@@ -243,8 +244,8 @@ fun SearchScreen(
                             onClick = onDownloadSelectedPlaylist,
                             enabled = pendingSelectedCount > 0,
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = PegoGreen,
-                                contentColor = Color.Black
+                                containerColor = MareaAccent,
+                                contentColor = MareaOnAccent
                             ),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -273,7 +274,7 @@ fun SearchScreen(
                             ) {
                                 Text(
                                     if (allSelected) "Deseleccionar" else "Seleccionar todas",
-                                    color = PegoGreen
+                                    color = MareaAccent
                                 )
                             }
                             OutlinedButton(onClick = onClearPlaylist) {
@@ -292,7 +293,7 @@ fun SearchScreen(
                             checked = track.isDownloaded || track.id in state.selectedPlaylistIds,
                             enabled = !track.isDownloaded,
                             onCheckedChange = { onTogglePlaylistSelection(track.id) },
-                            colors = CheckboxDefaults.colors(checkedColor = PegoGreen),
+                            colors = CheckboxDefaults.colors(checkedColor = MareaAccent),
                             modifier = Modifier.padding(start = 8.dp)
                         )
                         TrackRow(

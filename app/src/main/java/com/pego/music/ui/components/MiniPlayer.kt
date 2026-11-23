@@ -33,9 +33,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.pego.music.player.PlaybackUiState
-import com.pego.music.ui.theme.PegoCard
-import com.pego.music.ui.theme.PegoGreen
-import com.pego.music.ui.theme.PegoTextSecondary
+import com.pego.music.ui.theme.MareaCard
+import com.pego.music.ui.theme.MareaAccent
+import com.pego.music.ui.theme.MareaTextSecondary
 
 @Composable
 fun MiniPlayer(
@@ -55,7 +55,7 @@ fun MiniPlayer(
             .padding(horizontal = 8.dp, vertical = 4.dp)
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onExpand),
-        color = PegoCard,
+        color = MareaCard,
         tonalElevation = 4.dp
     ) {
         Column {
@@ -78,7 +78,7 @@ fun MiniPlayer(
                     Icon(
                         imageVector = Icons.Rounded.MusicNote,
                         contentDescription = null,
-                        tint = PegoTextSecondary,
+                        tint = MareaTextSecondary,
                         modifier = Modifier
                             .size(44.dp)
                             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
@@ -104,7 +104,7 @@ fun MiniPlayer(
                     Text(
                         text = track.artist,
                         style = MaterialTheme.typography.bodySmall,
-                        color = PegoTextSecondary,
+                        color = MareaTextSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center,
@@ -117,7 +117,7 @@ fun MiniPlayer(
                         modifier = Modifier
                             .padding(end = 12.dp)
                             .size(24.dp),
-                        color = PegoGreen,
+                        color = MareaAccent,
                         strokeWidth = 2.5.dp
                     )
                 } else {
@@ -136,7 +136,7 @@ fun MiniPlayer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(2.dp),
-                color = PegoGreen,
+                color = MareaAccent,
                 trackColor = MaterialTheme.colorScheme.surface
             )
         }

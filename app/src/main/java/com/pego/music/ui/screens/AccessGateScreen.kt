@@ -1,5 +1,6 @@
 package com.pego.music.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,17 +31,22 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.pego.music.R
 import com.pego.music.data.access.AccessRepository
 import com.pego.music.data.access.AccessState
-import com.pego.music.ui.theme.PegoBlack
-import com.pego.music.ui.theme.PegoGreen
-import com.pego.music.ui.theme.PegoTextSecondary
+import com.pego.music.ui.theme.BricolageGrotesque
+import com.pego.music.ui.theme.MareaBg
+import com.pego.music.ui.theme.MareaText
+import com.pego.music.ui.theme.MareaAccent
+import com.pego.music.ui.theme.MareaTextSecondary
+import com.pego.music.ui.theme.MareaOnAccent
 import kotlinx.coroutines.launch
 
 /** Muestra [content] solo si el servidor confirma que este dispositivo tiene acceso. */
@@ -52,10 +58,10 @@ fun AccessGate(
     val state by access.state.collectAsState()
     when (val s = state) {
         AccessState.Checking -> Box(
-            modifier = Modifier.fillMaxSize().background(PegoBlack),
+            modifier = Modifier.fillMaxSize().background(MareaBg),
             contentAlignment = Alignment.Center
         ) {
-            CircularProgressIndicator(color = PegoGreen)
+            CircularProgressIndicator(color = MareaAccent)
         }
 
         is AccessState.Locked -> AccessGateScreen(access = access, state = s)
@@ -86,16 +92,23 @@ private fun AccessGateScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(PegoBlack)
+            .background(MareaBg)
             .systemBarsPadding()
             .padding(28.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Image(
+            painter = painterResource(R.drawable.marea_logo),
+            contentDescription = null,
+            modifier = Modifier.size(88.dp)
+        )
+        Spacer(Modifier.height(16.dp))
         Text(
-            text = "PEGO",
-            color = PegoGreen,
+            text = "Marea",
+            color = MareaText,
             fontSize = 44.sp,
+            fontFamily = BricolageGrotesque,
             fontWeight = FontWeight.ExtraBold
         )
         Spacer(Modifier.height(8.dp))
@@ -105,7 +118,7 @@ private fun AccessGateScreen(
             } else {
                 "Esta app es privada. Ingresa el código de invitación de tu plan."
             },
-            color = PegoTextSecondary,
+            color = MareaTextSecondary,
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyLarge
         )
@@ -116,7 +129,7 @@ private fun AccessGateScreen(
                 onClick = { scope.launch { access.verify(force = true) } },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(26.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = PegoGreen)
+                colors = ButtonDefaults.buttonColors(containerColor = MareaAccent)
             ) {
                 Text("Reintentar", fontWeight = FontWeight.Bold)
             }
@@ -126,7 +139,7 @@ private fun AccessGateScreen(
                 onValueChange = { code = it.uppercase().take(16) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                label = { Text("Código (PEGO-XXXX-XXXX)") },
+                label = { Text("Código de invitación") },
                 isError = error != null,
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Characters,
@@ -142,15 +155,15 @@ private fun AccessGateScreen(
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(26.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = PegoGreen,
-                    contentColor = androidx.compose.ui.graphics.Color.Black
+                    containerColor = MareaAccent,
+                    contentColor = MareaOnAccent
                 )
             ) {
                 if (loading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(22.dp),
                         strokeWidth = 2.5.dp,
-                        color = androidx.compose.ui.graphics.Color.Black
+                        color = MareaOnAccent
                     )
                 } else {
                     Text("Entrar", fontWeight = FontWeight.Bold)
@@ -163,7 +176,7 @@ private fun AccessGateScreen(
             Spacer(Modifier.height(16.dp))
             Text(
                 text = message,
-                color = if (error != null) MaterialTheme.colorScheme.error else PegoTextSecondary,
+                color = if (error != null) MaterialTheme.colorScheme.error else MareaTextSecondary,
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodyMedium
             )

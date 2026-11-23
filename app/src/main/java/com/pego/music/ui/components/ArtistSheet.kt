@@ -35,9 +35,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pego.music.domain.model.TrackItem
 import com.pego.music.ui.ArtistUiState
-import com.pego.music.ui.theme.PegoBlack
-import com.pego.music.ui.theme.PegoGreen
-import com.pego.music.ui.theme.PegoTextSecondary
+import com.pego.music.ui.theme.MareaBg
+import com.pego.music.ui.theme.MareaAccent
+import com.pego.music.ui.theme.MareaTextSecondary
+import com.pego.music.ui.theme.MareaOnAccent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,7 +60,7 @@ fun ArtistSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = PegoBlack,
+        containerColor = MareaBg,
         dragHandle = null
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -78,13 +79,13 @@ fun ArtistSheet(
                 )
                 if (allArtistTracks.isNotEmpty()) {
                     IconButton(onClick = { onPlayShuffled(allArtistTracks) }) {
-                        Icon(Icons.Rounded.Shuffle, contentDescription = "Aleatorio", tint = PegoGreen)
+                        Icon(Icons.Rounded.Shuffle, contentDescription = "Aleatorio", tint = MareaAccent)
                     }
                     Button(
                         onClick = { onPlayTrack(allArtistTracks.first(), allArtistTracks) },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = PegoGreen,
-                            contentColor = Color.Black
+                            containerColor = MareaAccent,
+                            contentColor = MareaOnAccent
                         )
                     ) {
                         Text("Play", fontWeight = FontWeight.Bold)
@@ -112,7 +113,7 @@ fun ArtistSheet(
                     item(contentType = "empty_downloaded") {
                         Text(
                             text = "Sin canciones descargadas",
-                            color = PegoTextSecondary,
+                            color = MareaTextSecondary,
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         )
@@ -150,7 +151,7 @@ fun ArtistSheet(
                                     .padding(24.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                CircularProgressIndicator(color = PegoGreen)
+                                CircularProgressIndicator(color = MareaAccent)
                             }
                         }
                     }
@@ -159,7 +160,7 @@ fun ArtistSheet(
                         item(contentType = "empty_recs") {
                             Text(
                                 text = "Sin resultados disponibles",
-                                color = PegoTextSecondary,
+                                color = MareaTextSecondary,
                                 style = MaterialTheme.typography.bodySmall,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )

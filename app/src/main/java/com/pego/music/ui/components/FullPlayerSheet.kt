@@ -61,10 +61,11 @@ import com.pego.music.domain.model.LyricsResult
 import com.pego.music.domain.model.TrackItem
 import com.pego.music.player.PlaybackUiState
 import com.pego.music.player.RepeatMode
-import com.pego.music.ui.theme.PegoBlack
-import com.pego.music.ui.theme.PegoCard
-import com.pego.music.ui.theme.PegoGreen
-import com.pego.music.ui.theme.PegoTextSecondary
+import com.pego.music.ui.theme.MareaBg
+import com.pego.music.ui.theme.MareaCard
+import com.pego.music.ui.theme.MareaAccent
+import com.pego.music.ui.theme.MareaTextSecondary
+import com.pego.music.ui.theme.MareaOnAccent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,7 +94,7 @@ fun FullPlayerSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = PegoBlack,
+        containerColor = MareaBg,
         dragHandle = null
     ) {
         Column(
@@ -116,13 +117,13 @@ fun FullPlayerSheet(
                 Text(
                     text = if (track.isDownloaded) "OFFLINE" else "",
                     style = MaterialTheme.typography.labelMedium,
-                    color = PegoGreen
+                    color = MareaAccent
                 )
                 IconButton(onClick = { showLyrics = !showLyrics }) {
                     Icon(
                         imageVector = Icons.Rounded.Lyrics,
                         contentDescription = "Letras",
-                        tint = if (showLyrics) PegoGreen else PegoTextSecondary
+                        tint = if (showLyrics) MareaAccent else MareaTextSecondary
                     )
                 }
             }
@@ -135,20 +136,20 @@ fun FullPlayerSheet(
                         .fillMaxWidth()
                         .weight(1f)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(PegoCard)
+                        .background(MareaCard)
                         .padding(20.dp)
                 ) {
                     when {
                         isLoadingLyrics -> {
                             CircularProgressIndicator(
                                 modifier = Modifier.align(Alignment.Center),
-                                color = PegoGreen
+                                color = MareaAccent
                             )
                         }
                         lyrics?.plainLyrics.isNullOrBlank() && lyrics?.syncedLyrics.isNullOrBlank() -> {
                             Text(
                                 text = "Sin letras",
-                                color = PegoTextSecondary,
+                                color = MareaTextSecondary,
                                 modifier = Modifier.align(Alignment.Center)
                             )
                         }
@@ -178,7 +179,7 @@ fun FullPlayerSheet(
                             .fillMaxWidth(0.88f)
                             .aspectRatio(1f)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(PegoCard),
+                            .background(MareaCard),
                         contentAlignment = Alignment.Center
                     ) {
                         if (track.bestCoverUrl.isNotBlank()) {
@@ -192,7 +193,7 @@ fun FullPlayerSheet(
                             Icon(
                                 imageVector = Icons.Rounded.MusicNote,
                                 contentDescription = null,
-                                tint = PegoTextSecondary,
+                                tint = MareaTextSecondary,
                                 modifier = Modifier.size(80.dp)
                             )
                         }
@@ -219,7 +220,7 @@ fun FullPlayerSheet(
                 Text(
                     text = track.artist,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = PegoGreen,
+                    color = MareaAccent,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
@@ -244,7 +245,7 @@ fun FullPlayerSheet(
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.PlaylistAdd,
                         contentDescription = "Agregar a playlist",
-                        tint = PegoTextSecondary
+                        tint = MareaTextSecondary
                     )
                 }
 
@@ -253,14 +254,14 @@ fun FullPlayerSheet(
                         Icon(
                             imageVector = Icons.Rounded.Image,
                             contentDescription = "Cambiar portada",
-                            tint = PegoTextSecondary
+                            tint = MareaTextSecondary
                         )
                     }
                     IconButton(onClick = { onTrimTrack(track) }) {
                         Icon(
                             imageVector = Icons.Rounded.ContentCut,
                             contentDescription = "Recortar",
-                            tint = PegoTextSecondary
+                            tint = MareaTextSecondary
                         )
                     }
                 }
@@ -283,8 +284,8 @@ fun FullPlayerSheet(
                 valueRange = 0f..duration.toFloat(),
                 colors = SliderDefaults.colors(
                     thumbColor = Color.White,
-                    activeTrackColor = PegoGreen,
-                    inactiveTrackColor = PegoCard
+                    activeTrackColor = MareaAccent,
+                    inactiveTrackColor = MareaCard
                 )
             )
 
@@ -295,12 +296,12 @@ fun FullPlayerSheet(
                 Text(
                     text = formatDuration(playbackState.positionMs / 1000L),
                     style = MaterialTheme.typography.labelSmall,
-                    color = PegoTextSecondary
+                    color = MareaTextSecondary
                 )
                 Text(
                     text = formatDuration(duration / 1000L),
                     style = MaterialTheme.typography.labelSmall,
-                    color = PegoTextSecondary
+                    color = MareaTextSecondary
                 )
             }
 
@@ -317,7 +318,7 @@ fun FullPlayerSheet(
                     Icon(
                         imageVector = Icons.Rounded.Shuffle,
                         contentDescription = "Aleatorio",
-                        tint = if (playbackState.shuffleEnabled) PegoGreen else PegoTextSecondary
+                        tint = if (playbackState.shuffleEnabled) MareaAccent else MareaTextSecondary
                     )
                 }
 
@@ -332,21 +333,21 @@ fun FullPlayerSheet(
                 Surface(
                     onClick = onTogglePlayPause,
                     shape = CircleShape,
-                    color = Color.White,
+                    color = MareaAccent,
                     modifier = Modifier.size(66.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         if (playbackState.isBuffering) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(28.dp),
-                                color = Color.Black,
+                                color = MareaOnAccent,
                                 strokeWidth = 3.dp
                             )
                         } else {
                             Icon(
                                 imageVector = if (playbackState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                 contentDescription = "Play/Pause",
-                                tint = Color.Black,
+                                tint = MareaOnAccent,
                                 modifier = Modifier.size(38.dp)
                             )
                         }
@@ -369,7 +370,7 @@ fun FullPlayerSheet(
                     Icon(
                         imageVector = repeatIcon,
                         contentDescription = "Repetir",
-                        tint = if (playbackState.repeatMode != RepeatMode.OFF) PegoGreen else PegoTextSecondary
+                        tint = if (playbackState.repeatMode != RepeatMode.OFF) MareaAccent else MareaTextSecondary
                     )
                 }
             }
