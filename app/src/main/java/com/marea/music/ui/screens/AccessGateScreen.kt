@@ -49,6 +49,8 @@ import androidx.compose.ui.unit.sp
 import com.marea.music.R
 import com.marea.music.data.access.AccessRepository
 import com.marea.music.data.access.AccessState
+import com.marea.music.data.access.FamilyDetails
+import androidx.compose.foundation.layout.Row
 import com.marea.music.ui.theme.BricolageGrotesque
 import com.marea.music.ui.theme.MareaAccent
 import com.marea.music.ui.theme.MareaBg
@@ -427,6 +429,11 @@ fun SubscriptionScreen(
             }
         }
 
+        val details = sub?.takeIf { it.active }?.details
+        if (details != null) {
+            Spacer(Modifier.height(20.dp))
+            FamilySection(access = access, details = details)
+        }
         Spacer(Modifier.height(28.dp))
         OutlinedButton(
             onClick = { scope.launch { access.logout() } },
@@ -435,5 +442,155 @@ fun SubscriptionScreen(
         ) {
             Text("Cerrar sesión", color = MareaText, fontWeight = FontWeight.Bold)
         }
+    }
+}
+
+/** Personas del plan Dúo / Familiar. El dueño (quien puso el código) suma o quita correos. */
+@Composable
+private fun FamilySection(
+    access: AccessRepository,
+    details: FamilyDetails
+) {
+    val scope = rememberCoroutineScope()
+    var email by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var info by remember { mutableStateOf<String?>(null) }
+
+    fun run(block: suspend () -> String?, okMessage: String?) {
+        if (busy) return
+        busy = true
+        error = null
+        info = null
+        scope.launch {
+            error = block()
+            if (error == null) info = okMessage
+            busy = false
+        }
+    }
+
+    Text(
+        text = "Personas en tu plan (${details.members.size}/${details.seats})",
+        color = MareaText,
+        fontSize = 20.sp,
+        fontFamily = BricolageGrotesque,
+        fontWeight = FontWeight.Bold
+    )
+    Spacer(Modifier.height(4.dp))
+    Text(
+        text = when {
+            details.seats <= 1 -> "El plan Individual es solo para ti."
+            details.isOwner -> "Tú pusiste el código, así que puedes sumar a otras personas con su correo."
+            else -> "${details.ownerName ?: "El dueño del plan"} te compartió este plan."
+        } + " Cada cuenta reproduce en un solo dispositivo a la vez.",
+        color = MareaTextSecondary,
+        style = MaterialTheme.typography.bodySmall
+    )
+    Spacer(Modifier.height(12.dp))
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MareaCard, RoundedCornerShape(18.dp))
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+    ) {
+        details.members.forEach { m ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = m.name + when {
+                            m.isYou -> " (tú)"
+                            else -> ""
+                        },
+                        color = MareaText,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    val sub = listOfNotNull(if (m.isOwner) "Dueño del plan" else null, m.email).joinToString(" · ")
+                    if (sub.isNotEmpty()) {
+                        Text(sub, color = MareaTextSecondary, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                if (details.isOwner && !m.isYou) {
+                    TextButton(
+                        onClick = { run({ access.removeFamilyMember(m.id) }, "${m.name} ya no está en tu plan") },
+                        enabled = !busy
+                    ) {
+                        Text("Quitar", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        }
+        details.pendingEmails.forEach { p ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(p.email, color = MareaText, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Pendiente: entra cuando cree su cuenta con este correo",
+                        color = MareaTextSecondary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                TextButton(
+                    onClick = { run({ access.removePendingEmail(p.id) }, null) },
+                    enabled = !busy
+                ) {
+                    Text("Cancelar", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+    }
+
+    if (details.isOwner && details.seats > 1) {
+        Spacer(Modifier.height(12.dp))
+        if (details.seatsFree > 0) {
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it.trim().take(120) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Correo de la persona") },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(onDone = {
+                    if (email.isNotBlank()) run({ access.addFamilyEmail(email).also { if (it == null) email = "" } }, "Listo, ya puede disfrutar tu plan")
+                }),
+                shape = RoundedCornerShape(16.dp)
+            )
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = {
+                    run({ access.addFamilyEmail(email).also { if (it == null) email = "" } }, "Listo, ya puede disfrutar tu plan")
+                },
+                enabled = !busy && email.isNotBlank(),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MareaAccent,
+                    contentColor = MareaOnAccent
+                )
+            ) {
+                Text("Agregar persona (${details.seatsFree} cupo${if (details.seatsFree == 1) "" else "s"} libre${if (details.seatsFree == 1) "" else "s"})", fontWeight = FontWeight.Bold)
+            }
+        } else {
+            Text("Tu plan ya no tiene cupos libres.", color = MareaTextSecondary, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+
+    val message = error ?: info
+    if (message != null) {
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = message,
+            color = if (error != null) MaterialTheme.colorScheme.error else MareaTextSecondary,
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }

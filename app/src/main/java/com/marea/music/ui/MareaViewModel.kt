@@ -8,6 +8,8 @@ import com.marea.music.AppContainer
 import com.marea.music.core.image.CoverQualityResult
 import com.marea.music.core.image.ImageQualityEvaluator
 import com.marea.music.data.extractor.ParsedYouTubeInput
+import com.marea.music.data.history.ListeningHistory
+import com.marea.music.data.history.TopArtist
 import com.marea.music.data.extractor.YouTubeUrlParser
 import com.marea.music.data.local.PlaylistEntity
 import com.marea.music.data.local.PlaylistTrackCrossRef
@@ -103,9 +105,21 @@ class MareaViewModel(
     private var enrichJob: Job? = null
     private var recommendJob: Job? = null
     private var artistJob: Job? = null
+    private var lyricsJob: Job? = null
+    private var artistMixJob: Job? = null
     private var searchGeneration = 0L
 
     val playbackState: StateFlow<PlaybackUiState> = container.playerController.uiState
+
+    // ---- Tu top: lo que más has escuchado y canciones de esos artistas ----
+
+    val topArtists: StateFlow<List<TopArtist>> = container.listeningHistory.entries
+        .map { ListeningHistory.topArtistsOf(it, limit = 12) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _artistMix = MutableStateFlow<List<TrackItem>>(emptyList())
+    private val _isLoadingArtistMix = MutableStateFlow(false)
+    val isLoadingArtistMix: StateFlow<Boolean> = _isLoadingArtistMix.asStateFlow()
 
     val allSavedTracksMap: StateFlow<Map<String, TrackItem>> = dao.observeAllTracks()
         .map { list -> list.associate { it.id to it.toDomain() } }
@@ -122,6 +136,22 @@ class MareaViewModel(
     val localPlaylists: StateFlow<List<LocalPlaylist>> = dao.observePlaylistsWithTracks()
         .map { list -> list.map { it.toDomain() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Tus canciones más escuchadas, con el estado de descarga al día. */
+    val topTracks: StateFlow<List<TrackItem>> = combine(
+        container.listeningHistory.entries,
+        allSavedTracksMap
+    ) { entries, savedMap ->
+        entries
+            .sortedWith(compareByDescending<com.marea.music.data.history.PlayedTrack> { it.plays }.thenByDescending { it.lastPlayed })
+            .take(10)
+            .map { savedMap[it.track.id] ?: it.track }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Canciones nuevas de los artistas que más escuchas. */
+    val artistMix: StateFlow<List<TrackItem>> = combine(_artistMix, allSavedTracksMap) { mix, savedMap ->
+        mix.map { savedMap[it.id] ?: it }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
      * Syncs recommendation download status with Room (matching by ID or normalized artist+title).
@@ -194,6 +224,23 @@ class MareaViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     init {
+        // La letra sigue a la canción que suena, también con siguiente/anterior y audífonos.
+        viewModelScope.launch {
+            container.playerController.uiState
+                .map { state -> state.currentTrack?.takeIf { !state.isAd } }
+                .distinctUntilChanged { a, b -> a?.id == b?.id }
+                .collect { track -> loadLyricsFor(track) }
+        }
+        // "De tus artistas" se actualiza cuando cambian tus artistas más escuchados.
+        viewModelScope.launch {
+            topArtists
+                .map { list -> list.take(3).map { it.name } }
+                .distinctUntilChanged()
+                .collect { refreshArtistMix() }
+        }
+    }
+
+    init {
         viewModelScope.launch {
             downloadedTracks
                 .map { list -> list.map { it.id }.toSet() }
@@ -206,12 +253,75 @@ class MareaViewModel(
         }
     }
 
+    /** Mezcla canciones de tus 3 artistas más escuchados que todavía no están en tu top. */
+    fun refreshArtistMix() {
+        val artists = topArtists.value.take(3).map { it.name }
+        if (artists.isEmpty()) {
+            _artistMix.value = emptyList()
+            return
+        }
+        artistMixJob?.cancel()
+        artistMixJob = viewModelScope.launch {
+            _isLoadingArtistMix.value = true
+            val known = container.listeningHistory.entries.value.map { it.track } + downloadedTracks.value
+            val perArtist = artists.map { name ->
+                async {
+                    runCatching {
+                        container.recommendationEngine.recommendStrictForArtist(
+                            rawArtist = name,
+                            downloadedTracks = known,
+                            limit = 8
+                        )
+                    }.getOrDefault(emptyList())
+                }
+            }.awaitAll()
+            // Intercala: una de cada artista por turno.
+            val mixed = mutableListOf<TrackItem>()
+            val maxLen = perArtist.maxOfOrNull { it.size } ?: 0
+            for (i in 0 until maxLen) perArtist.forEach { list -> list.getOrNull(i)?.let(mixed::add) }
+            _artistMix.value = mixed.distinctBy { it.id }.take(18)
+            _isLoadingArtistMix.value = false
+        }
+    }
+
+    /** Reproduce las canciones de un artista: primero las descargadas y luego las más populares. */
+    fun playArtist(rawArtist: String) {
+        val primary = TitleCleaner.extractPrimaryArtist(rawArtist).ifBlank { rawArtist }
+        if (primary.isBlank()) return
+        viewModelScope.launch {
+            _uiMessage.value = "Preparando canciones de $primary…"
+            val downloaded = downloadedTracks.value.filter { track ->
+                TitleCleaner.isExplicitArtistMatch(
+                    targetArtist = primary,
+                    candidateArtist = track.artist,
+                    candidateTitle = track.title
+                )
+            }
+            val popular = runCatching {
+                container.recommendationEngine.recommendStrictForArtist(
+                    rawArtist = primary,
+                    downloadedTracks = downloaded,
+                    limit = 25
+                )
+            }.getOrDefault(emptyList())
+            val queue = (downloaded.shuffled() + popular).distinctBy { it.id }
+            if (queue.isEmpty()) {
+                _uiMessage.value = "No encontramos canciones de $primary"
+                return@launch
+            }
+            playTrack(queue.first(), queue)
+        }
+    }
+
     fun refreshRecommendations() {
         recommendJob?.cancel()
         recommendJob = viewModelScope.launch {
             _isLoadingRecommendations.value = true
+            // Tu biblioteca más lo que más escuchas: así las recomendaciones siguen tus gustos.
+            val seeds = (downloadedTracks.value + container.listeningHistory.topTracks(12).map { it.track })
+                .distinctBy { it.id }
             val recs = container.recommendationEngine.recommendForLibrary(
-                downloadedTracks = downloadedTracks.value,
+                downloadedTracks = seeds,
                 limit = 16
             )
             _rawRecommendations.value = recs
@@ -628,7 +738,6 @@ class MareaViewModel(
         val synced = allSavedTracksMap.value[track.id] ?: track
         val syncedQueue = queue.map { allSavedTracksMap.value[it.id] ?: it }
         container.playerController.playTrack(synced, syncedQueue)
-        loadLyricsFor(synced)
     }
 
     fun togglePlayPause() = container.playerController.togglePlayPause()
@@ -638,14 +747,22 @@ class MareaViewModel(
     fun toggleShuffle() = container.playerController.toggleShuffle()
     fun cycleRepeatMode() = container.playerController.cycleRepeatMode()
 
-    fun loadLyricsFor(track: TrackItem) {
-        viewModelScope.launch {
+    /** Carga la letra de [track]; la de la canción anterior se borra al instante. */
+    fun loadLyricsFor(track: TrackItem?) {
+        lyricsJob?.cancel()
+        _lyricsState.value = null
+        if (track == null) {
+            _isLoadingLyrics.value = false
+            return
+        }
+        lyricsJob = viewModelScope.launch {
             _isLoadingLyrics.value = true
-            _lyricsState.value = container.lyricsRepository.fetchLyrics(
+            val result = container.lyricsRepository.fetchLyrics(
                 artist = track.artist,
                 title = track.cleanTitle.ifBlank { track.title },
                 durationSeconds = track.durationSeconds
             )
+            _lyricsState.value = result
             _isLoadingLyrics.value = false
         }
     }

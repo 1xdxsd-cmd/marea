@@ -118,6 +118,10 @@ class MainActivity : ComponentActivity() {
                     val coverEditorState by viewModel.coverEditorState.collectAsState()
                     val uiMessage by viewModel.uiMessage.collectAsState()
                     val accessState by container.accessRepository.state.collectAsState()
+                    val topTracks by viewModel.topTracks.collectAsState()
+                    val topArtists by viewModel.topArtists.collectAsState()
+                    val artistMix by viewModel.artistMix.collectAsState()
+                    val isLoadingArtistMix by viewModel.isLoadingArtistMix.collectAsState()
 
                     LaunchedEffect(initialSharedUrl) {
                         if (initialSharedUrl != null) {
@@ -196,9 +200,14 @@ class MainActivity : ComponentActivity() {
                         ) {
                             when (selectedTab) {
                                 0 -> HomeScreen(
+                                    userName = (accessState as? AccessState.SignedIn)?.name.orEmpty(),
                                     playlists = localPlaylists,
                                     recommendations = recommendations,
                                     isLoadingRecommendations = isLoadingRecs,
+                                    topTracks = topTracks,
+                                    topArtists = topArtists,
+                                    artistMix = artistMix,
+                                    isLoadingArtistMix = isLoadingArtistMix,
                                     currentTrackId = playbackState.currentTrack?.id,
                                     onSearchSubmit = { query ->
                                         selectedTab = 1
@@ -208,7 +217,8 @@ class MainActivity : ComponentActivity() {
                                     onPlayTrack = viewModel::playTrack,
                                     onDownloadTrack = viewModel::downloadSingleTrack,
                                     onAddToPlaylist = { trackForPlaylist = it },
-                                    onArtistClick = viewModel::openArtistPage
+                                    onArtistClick = viewModel::openArtistPage,
+                                    onPlayArtist = viewModel::playArtist
                                 )
 
                                 1 -> SearchScreen(

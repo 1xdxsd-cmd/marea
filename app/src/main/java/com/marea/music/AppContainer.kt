@@ -2,7 +2,9 @@ package com.marea.music
 
 import android.content.Context
 import com.marea.music.core.network.OkHttpDownloader
+import com.marea.music.data.access.AccessMonitor
 import com.marea.music.data.access.AccessRepository
+import com.marea.music.data.history.ListeningHistory
 import com.marea.music.data.audio.AudioTrimmer
 import com.marea.music.data.download.DownloadOrchestrator
 import com.marea.music.data.extractor.YouTubeExtractorRepository
@@ -26,6 +28,8 @@ class AppContainer(context: Context) {
     val audioTagger = AudioTagger(appContext)
     val audioTrimmer = AudioTrimmer(appContext)
     val downloadOrchestrator = DownloadOrchestrator(appContext, database.mareaDao())
-    val playerController = PlayerController(appContext, extractorRepo)
+    val listeningHistory = ListeningHistory(appContext)
+    val playerController = PlayerController(appContext, extractorRepo, listeningHistory)
     val accessRepository = AccessRepository(appContext, httpClient, BuildConfig.ACCESS_SERVER_URL)
+    val accessMonitor = AccessMonitor(accessRepository, playerController).also { it.start() }
 }

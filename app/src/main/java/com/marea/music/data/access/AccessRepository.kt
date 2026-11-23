@@ -20,8 +20,29 @@ data class Subscription(
     val planLabel: String,
     val family: String,
     val label: String,
-    val active: Boolean
+    val active: Boolean,
+    val details: FamilyDetails? = null
 )
+
+/** Personas del plan. Solo el dueño (quien puso el código) puede sumar o quitar correos. */
+data class FamilyDetails(
+    val seats: Int,
+    val seatsFree: Int,
+    val isOwner: Boolean,
+    val ownerName: String?,
+    val members: List<FamilyMember>,
+    val pendingEmails: List<PendingEmail>
+)
+
+data class FamilyMember(
+    val id: Long,
+    val name: String,
+    val email: String?,
+    val isOwner: Boolean,
+    val isYou: Boolean
+)
+
+data class PendingEmail(val id: Long, val email: String)
 
 sealed interface AccessState {
     /** Verificando la sesión guardada con el servidor. */
@@ -138,13 +159,7 @@ class AccessRepository(
                 val json = runCatching { JSONObject(resp.body?.string().orEmpty()) }.getOrNull()
                 when {
                     resp.isSuccessful && json != null -> {
-                        val sub = parseSubscription(json.optJSONObject("subscription"))
-                        val current = _state.value as? AccessState.SignedIn
-                        if (current != null) {
-                            _state.value = current.copy(subscription = sub, offline = false, message = null)
-                        }
-                        saveCache(_state.value)
-                        lastCheckMs = System.currentTimeMillis()
+                        applyMe(json)
                         null
                     }
                     resp.code == 401 -> {
@@ -158,6 +173,70 @@ class AccessRepository(
         } catch (e: IOException) {
             "No se pudo conectar con el servidor. Revisa tu internet."
         }
+    }
+
+    /** Dúo / Familiar: el dueño suma a una persona por correo. Devuelve null o el error. */
+    suspend fun addFamilyEmail(email: String): String? =
+        familyCall("POST", "/v1/family/members", JSONObject().put("email", email.trim()))
+
+    /** Dúo / Familiar: el dueño quita a una persona del plan. */
+    suspend fun removeFamilyMember(memberId: Long): String? =
+        familyCall("DELETE", "/v1/family/members/$memberId", null)
+
+    /** Dúo / Familiar: el dueño cancela un correo invitado que aún no se registra. */
+    suspend fun removePendingEmail(inviteId: Long): String? =
+        familyCall("DELETE", "/v1/family/pending/$inviteId", null)
+
+    private suspend fun familyCall(method: String, path: String, body: JSONObject?): String? =
+        withContext(Dispatchers.IO) {
+            val token = prefs.getString(KEY_SESSION, null)
+                ?: return@withContext "Inicia sesión primero."
+            val request = Request.Builder()
+                .url("$baseUrl$path")
+                .header("Authorization", "Bearer $token")
+                .method(method, (body?.toString() ?: "{}").toRequestBody(JSON))
+                .build()
+            try {
+                client.newCall(request).execute().use { resp ->
+                    val json = runCatching { JSONObject(resp.body?.string().orEmpty()) }.getOrNull()
+                    when {
+                        resp.isSuccessful && json != null -> {
+                            applyMe(json)
+                            null
+                        }
+                        resp.code == 401 -> {
+                            signOutLocally("Tu sesión se cerró. Vuelve a iniciar sesión.")
+                            "Tu sesión se cerró. Vuelve a iniciar sesión."
+                        }
+                        else -> json?.optString("error")?.takeIf { it.isNotEmpty() }
+                            ?: "No se pudo completar (${resp.code})"
+                    }
+                }
+            } catch (e: IOException) {
+                "No se pudo conectar con el servidor. Revisa tu internet."
+            } catch (e: org.json.JSONException) {
+                "Respuesta inválida del servidor. Intenta de nuevo."
+            }
+        }
+
+    /**
+     * Un solo dispositivo reproduciendo por cuenta. [claim] = este teléfono empezó a reproducir.
+     * Devuelve false si otro dispositivo tomó la cuenta, o null si no se pudo consultar.
+     */
+    suspend fun playbackHeartbeat(claim: Boolean): Boolean? = withContext(Dispatchers.IO) {
+        val token = prefs.getString(KEY_SESSION, null) ?: return@withContext null
+        val body = JSONObject().put("deviceId", deviceId).put("claim", claim).toString().toRequestBody(JSON)
+        val request = Request.Builder()
+            .url("$baseUrl/v1/playback/heartbeat")
+            .header("Authorization", "Bearer $token")
+            .post(body)
+            .build()
+        runCatching {
+            client.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) return@use null
+                JSONObject(resp.body?.string().orEmpty()).optBoolean("active", true)
+            }
+        }.getOrNull()
     }
 
     /** Verifica la sesión guardada. Con [force] = false se salta si se verificó hace poco. */
@@ -232,7 +311,34 @@ class AccessRepository(
             planLabel = json.optString("planLabel"),
             family = json.optString("family"),
             label = json.optString("label"),
-            active = json.optBoolean("active", false)
+            active = json.optBoolean("active", false),
+            details = parseDetails(json.optJSONObject("details"))
+        )
+    }
+
+    private fun parseDetails(json: JSONObject?): FamilyDetails? {
+        if (json == null) return null
+        val members = json.optJSONArray("members")
+        val pending = json.optJSONArray("pendingEmails")
+        return FamilyDetails(
+            seats = json.optInt("seats"),
+            seatsFree = json.optInt("seatsFree"),
+            isOwner = json.optBoolean("isOwner"),
+            ownerName = json.optJSONObject("owner")?.optString("name")?.takeIf { it.isNotBlank() },
+            members = (0 until (members?.length() ?: 0)).map { i ->
+                val m = members!!.getJSONObject(i)
+                FamilyMember(
+                    id = m.optLong("id"),
+                    name = m.optString("name"),
+                    email = m.optString("email").takeIf { it.isNotBlank() && it != "null" },
+                    isOwner = m.optBoolean("isOwner"),
+                    isYou = m.optBoolean("isYou")
+                )
+            },
+            pendingEmails = (0 until (pending?.length() ?: 0)).map { i ->
+                val p = pending!!.getJSONObject(i)
+                PendingEmail(id = p.optLong("id"), email = p.optString("email"))
+            }
         )
     }
 

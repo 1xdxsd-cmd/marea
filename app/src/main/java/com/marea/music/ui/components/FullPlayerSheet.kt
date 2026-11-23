@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,7 +26,6 @@ import androidx.compose.material.icons.rounded.ContentCut
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -44,6 +46,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +61,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.marea.music.data.metadata.LrcParser
 import com.marea.music.domain.model.LyricsResult
 import com.marea.music.domain.model.TrackItem
 import com.marea.music.player.PlaybackUiState
@@ -91,7 +95,6 @@ fun FullPlayerSheet(
 ) {
     val track = syncedTrack ?: playbackState.currentTrack ?: return
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var showLyrics by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -102,6 +105,7 @@ fun FullPlayerSheet(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 16.dp)
         ) {
             Row(
@@ -117,100 +121,51 @@ fun FullPlayerSheet(
                     )
                 }
                 Text(
-                    text = if (track.isDownloaded) "OFFLINE" else "",
+                    text = when {
+                        playbackState.isAd -> "ANUNCIO"
+                        track.isDownloaded -> "OFFLINE"
+                        else -> ""
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     color = MareaAccent
                 )
-                Row {
-                    IconButton(onClick = onOpenEqualizer) {
-                        Icon(
-                            imageVector = Icons.Rounded.GraphicEq,
-                            contentDescription = "Ecualizador",
-                            tint = MareaTextSecondary
-                        )
-                    }
-                    IconButton(
-                        onClick = { showLyrics = !showLyrics },
-                        enabled = !playbackState.isAd
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Lyrics,
-                            contentDescription = "Letras",
-                            tint = if (showLyrics) MareaAccent else MareaTextSecondary
-                        )
-                    }
+                IconButton(onClick = onOpenEqualizer) {
+                    Icon(
+                        imageVector = Icons.Rounded.GraphicEq,
+                        contentDescription = "Ecualizador",
+                        tint = MareaTextSecondary
+                    )
                 }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            if (showLyrics && !playbackState.isAd) {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MareaCard)
-                        .padding(20.dp)
-                ) {
-                    when {
-                        isLoadingLyrics -> {
-                            CircularProgressIndicator(
-                                modifier = Modifier.align(Alignment.Center),
-                                color = MareaAccent
-                            )
-                        }
-                        lyrics?.plainLyrics.isNullOrBlank() && lyrics?.syncedLyrics.isNullOrBlank() -> {
-                            Text(
-                                text = "Sin letras",
-                                color = MareaTextSecondary,
-                                modifier = Modifier.align(Alignment.Center)
-                            )
-                        }
-                        else -> {
-                            val displayLyrics = lyrics?.plainLyrics
-                                ?: lyrics?.syncedLyrics?.replace(Regex("""\[\d{2}:\d{2}\.\d{2,3}]\s*"""), "")
-                                ?: ""
-                            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                                Text(
-                                    text = displayLyrics,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onBackground
-                                )
-                            }
-                        }
-                    }
-                }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
+                        .fillMaxWidth(0.86f)
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(MareaCard),
                     contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.88f)
-                            .aspectRatio(1f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MareaCard),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (track.bestCoverUrl.isNotBlank()) {
-                            AsyncImage(
-                                model = track.bestCoverUrl,
-                                contentDescription = track.cleanTitle,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Rounded.MusicNote,
-                                contentDescription = null,
-                                tint = MareaTextSecondary,
-                                modifier = Modifier.size(80.dp)
-                            )
-                        }
+                    if (track.bestCoverUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = track.bestCoverUrl,
+                            contentDescription = track.cleanTitle,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.MusicNote,
+                            contentDescription = null,
+                            tint = MareaTextSecondary,
+                            modifier = Modifier.size(80.dp)
+                        )
                     }
                 }
             }
@@ -388,6 +343,99 @@ fun FullPlayerSheet(
                     )
                 }
             }
+
+            if (!playbackState.isAd) {
+                LyricsPanel(
+                    lyrics = lyrics,
+                    isLoading = isLoadingLyrics,
+                    positionMs = playbackState.positionMs,
+                    onSeekTo = onSeekTo
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+    }
+}
+
+/**
+ * Letra debajo del reproductor. Con letra sincronizada resalta la línea que suena y se desplaza
+ * sola; tocar una línea salta a ese momento de la canción.
+ */
+@Composable
+private fun LyricsPanel(
+    lyrics: LyricsResult?,
+    isLoading: Boolean,
+    positionMs: Long,
+    onSeekTo: (Long) -> Unit
+) {
+    val synced = remember(lyrics) { LrcParser.parse(lyrics?.syncedLyrics) }
+    val active = LrcParser.activeIndex(synced, positionMs + 250L)
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(active, synced) {
+        if (synced.isNotEmpty()) listState.animateScrollToItem((active - 1).coerceAtLeast(0))
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(MareaCard)
+            .padding(horizontal = 18.dp, vertical = 16.dp)
+    ) {
+        Text(
+            text = "Letra",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        when {
+            isLoading -> Box(
+                modifier = Modifier.fillMaxWidth().height(80.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = MareaAccent, modifier = Modifier.size(28.dp))
+            }
+
+            synced.isNotEmpty() -> LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxWidth().height(260.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                itemsIndexed(synced) { index, line ->
+                    val isActive = index == active
+                    Text(
+                        text = line.text.ifBlank { "♪" },
+                        style = if (isActive) {
+                            MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                        } else {
+                            MaterialTheme.typography.titleMedium
+                        },
+                        color = when {
+                            isActive -> MaterialTheme.colorScheme.onBackground
+                            index < active -> MareaTextSecondary.copy(alpha = 0.6f)
+                            else -> MareaTextSecondary
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onSeekTo(line.timeMs) }
+                            .padding(vertical = 2.dp)
+                    )
+                }
+            }
+
+            !lyrics?.plainLyrics.isNullOrBlank() -> Text(
+                text = lyrics?.plainLyrics.orEmpty(),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+
+            else -> Text(
+                text = "No encontramos la letra de esta canción",
+                color = MareaTextSecondary,
+                style = MaterialTheme.typography.bodyMedium
+            )
         }
     }
 }

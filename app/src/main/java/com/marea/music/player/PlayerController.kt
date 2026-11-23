@@ -11,6 +11,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.marea.music.R
 import com.marea.music.data.extractor.YouTubeExtractorRepository
+import com.marea.music.data.history.ListeningHistory
 import com.marea.music.domain.model.TrackItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -48,7 +49,8 @@ data class PlaybackUiState(
 
 class PlayerController(
     private val context: Context,
-    private val extractorRepo: YouTubeExtractorRepository
+    private val extractorRepo: YouTubeExtractorRepository,
+    private val history: ListeningHistory? = null
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -132,7 +134,7 @@ class PlayerController(
                         else it.copy(positionMs = pos, durationMs = dur)
                     }
                 }
-                delay(500L)
+                delay(250L)
             }
         }
     }
@@ -255,6 +257,12 @@ class PlayerController(
 
     fun pause() {
         mediaController?.pause()
+    }
+
+    /** Pausa y muestra un aviso (por ejemplo, la cuenta empezó a sonar en otro dispositivo). */
+    fun pauseWithMessage(message: String) {
+        mediaController?.pause()
+        _uiState.update { it.copy(errorMessage = message) }
     }
 
     fun seekTo(positionMs: Long) {
@@ -409,6 +417,7 @@ class PlayerController(
                 controller.setMediaItem(mediaItem)
                 controller.prepare()
                 controller.play()
+                history?.record(track)
 
                 prefetchNextTrack()
             } catch (e: Exception) {
