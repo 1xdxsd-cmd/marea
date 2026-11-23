@@ -18,6 +18,5 @@ build/
 *.jks
 *.keystore
 *.jfif
-PEGOLogoV3.jpg
 .env
 .env.*

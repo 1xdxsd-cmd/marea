@@ -14,20 +14,20 @@
         android:maxSdkVersion="28" />
 
     <application
-        android:name=".PegoApp"
+        android:name=".MareaApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.PEGO"
+        android:theme="@style/Theme.Marea"
         android:usesCleartextTraffic="false">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:theme="@style/Theme.PEGO">
+            android:theme="@style/Theme.Marea">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -55,7 +55,7 @@
         </activity>
 
         <service
-            android:name=".player.PegoPlaybackService"
+            android:name=".player.MareaPlaybackService"
             android:exported="true"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>

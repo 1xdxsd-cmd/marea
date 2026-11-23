@@ -7,13 +7,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      PEGO_ACCESS_URL: ${{ secrets.PEGO_ACCESS_URL }}
+      MAREA_ACCESS_URL: ${{ secrets.MAREA_ACCESS_URL }}
 
     steps:
       - name: Verificar secreto
         run: |
-          if [ -z "$PEGO_ACCESS_URL" ]; then
-            echo "Falta el secreto PEGO_ACCESS_URL (Settings > Secrets and variables > Actions)"
+          if [ -z "$MAREA_ACCESS_URL" ]; then
+            echo "Falta el secreto MAREA_ACCESS_URL (Settings > Secrets and variables > Actions)"
             exit 1
           fi
 
@@ -36,6 +36,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: pego-debug-apk
+          name: marea-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7

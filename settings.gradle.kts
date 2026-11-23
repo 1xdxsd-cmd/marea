@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "PEGO"
+rootProject.name = "Marea"
 include(":app")
