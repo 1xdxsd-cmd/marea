@@ -390,9 +390,23 @@ admin.post(
 );
 
 app.use('/admin/api', admin);
+const adminDir = path.join(__dirname, 'public', 'admin');
+function adminHeaders(res) {
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors 'none'"
+  );
+}
+// "/admin" y "/admin/" muestran el panel directamente, sin redirección (algunos proxys la rompen).
+app.get(['/admin', '/admin/'], (_req, res) => {
+  adminHeaders(res);
+  res.sendFile(path.join(adminDir, 'index.html'));
+});
 app.use(
   '/admin',
-  express.static(path.join(__dirname, 'public', 'admin'), {
+  express.static(adminDir, {
+    redirect: false,
     setHeaders: (res) => {
       res.setHeader('X-Frame-Options', 'DENY');
       res.setHeader(
@@ -407,8 +421,11 @@ app.get('/', (_req, res) => res.redirect('/admin/'));
 // ---------- Arranque ----------
 
 // Pterodactyl define SERVER_PORT y necesita escuchar en 0.0.0.0.
-const port = Number(process.env.PORT || process.env.SERVER_PORT || 1753);
+const port = Number(process.env.SERVER_PORT || process.env.PORT || 1753);
 const host = process.env.HOST || (process.env.SERVER_PORT ? '0.0.0.0' : '127.0.0.1');
+if (!require('fs').existsSync(path.join(adminDir, 'index.html'))) {
+  console.error(`AVISO: falta ${path.join(adminDir, 'index.html')}. Sube la carpeta public/ completa junto a server.js.`);
+}
 app.listen(port, host, () => {
   console.log(`Servidor de acceso de Marea en http://${host}:${port}`);
   console.log(`Web de administración: /admin`);

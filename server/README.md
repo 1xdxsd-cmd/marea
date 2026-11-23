@@ -23,12 +23,17 @@ revocas a alguien o desactivas el plan, vuelve al plan gratis en su próxima ver
 ```bash
 cd server
 npm install
-node server.js        # en Pterodactyl usa SERVER_PORT y escucha en 0.0.0.0
+node index.js         # en Pterodactyl usa SERVER_PORT y escucha en 0.0.0.0
 ```
 
-Variables: `PORT` o `SERVER_PORT` (1753 por defecto), `HOST`, `MAREA_DB` (ruta del archivo SQLite, `marea.db` por defecto).
+**Pterodactyl (egg de Node):** sube el *contenido* de `server/` directo a `/home/container`
+(`index.js`, `server.js`, `db.js`, `cli.js`, `package.json`, `package-lock.json` y la carpeta `public/`),
+sin `node_modules` (el panel corre `npm install`). Pon `MAIN_FILE` = `index.js`; con `server.js` el
+panel intenta arrancarlo con `tsx`. No hace falta configurar el puerto: se usa el que asigna el panel.
 
-**Actualizar desde la versión anterior:** reemplaza `db.js`, `server.js`, `cli.js`, `package.json` y
+Variables: `SERVER_PORT` o `PORT` (1753 por defecto), `HOST`, `MAREA_DB` (ruta del archivo SQLite, `marea.db` por defecto).
+
+**Actualizar desde la versión anterior:** reemplaza `index.js`, `db.js`, `server.js`, `cli.js`, `package.json` y
 copia la carpeta `public/`. La base de datos ahora se llama `marea.db`; si quieres conservar la de
 la versión anterior, renómbrala a `marea.db` antes de arrancar (las tablas nuevas se crean solas).
 Los códigos nuevos empiezan con `MAREA-`.
