@@ -139,7 +139,8 @@ class DownloadWorker(
             val saved = container.audioTagger.tagAndSaveM4a(
                 tempAudioFile = tempAudioFile!!,
                 coverFile = tempCoverFile,
-                metadata = enriched
+                metadata = enriched,
+                trackId = trackId
             )
 
             dao.markDownloadCompleted(
@@ -154,9 +155,13 @@ class DownloadWorker(
             )
 
             // Guarda la letra para verla sin internet (si no hay, no pasa nada).
-            runCatching { container.lyricsRepository.fetchLyrics(enriched.artist, enriched.title) }
+            runCatching {
+                container.lyricsRepository.fetchLyrics(enriched.artist, enriched.title, trackIds = listOf(trackId))
+            }
             if (enriched.title != rawTitle || enriched.artist != rawArtist) {
-                runCatching { container.lyricsRepository.fetchLyrics(rawArtist, rawTitle) }
+                runCatching {
+                    container.lyricsRepository.fetchLyrics(rawArtist, rawTitle, trackIds = listOf(trackId))
+                }
             }
 
             Result.success()

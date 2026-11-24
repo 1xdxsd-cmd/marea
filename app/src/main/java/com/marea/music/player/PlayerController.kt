@@ -75,6 +75,7 @@ class PlayerController(
     private var errorSkipJob: Job? = null
     private var consecutiveErrors = 0
     private var podcastTicks = 0
+    private val resolvedSources = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     // ---- Plan gratis: anuncios y límite de saltos ----
     private val freePrefs = context.getSharedPreferences(FREE_PREFS, Context.MODE_PRIVATE)
@@ -413,6 +414,9 @@ class PlayerController(
         prefetchJob?.cancel()
 
         playJob = scope.launch {
+            // Calla la canción anterior al instante (antes seguía sonando unos segundos y la
+            // barra regresaba mientras cargaba la nueva).
+            mediaController?.pause()
             _position.value = 0L
             _uiState.update {
                 it.copy(
@@ -469,6 +473,7 @@ class PlayerController(
     private fun savePodcastProgress() {
         val track = _uiState.value.currentTrack?.takeIf { it.isPodcast } ?: return
         val controller = mediaController ?: return
+        if (controller.currentMediaItem?.mediaId != track.id) return
         val pos = controller.currentPosition.coerceAtLeast(0L)
         if (pos < 5_000L) return
         PodcastProgressStore.save(track.id, pos, controller.duration.coerceAtLeast(_uiState.value.durationMs))
@@ -551,33 +556,43 @@ class PlayerController(
         }
     }
 
+    /**
+     * Prepara las 2 siguientes canciones: busca su audio y baja el inicio a la caché,
+     * así "siguiente" (en la app o en los audífonos) arranca casi al instante.
+     */
     private fun prefetchNextTrack() {
-        val nextIndex = when {
-            activeQueue.isEmpty() -> return
-            currentIndex + 1 < activeQueue.size -> currentIndex + 1
-            _uiState.value.repeatMode == RepeatMode.ALL -> 0
-            else -> return
-        }
-        val nextTrack = activeQueue.getOrNull(nextIndex) ?: return
-        if (nextTrack.isPodcast) return
-        if (!nextTrack.localUri.isNullOrBlank() || !nextTrack.localFilePath.isNullOrBlank()) return
+        if (activeQueue.isEmpty()) return
+        val upcoming = (1..PREFETCH_AHEAD).mapNotNull { step ->
+            val i = currentIndex + step
+            when {
+                i < activeQueue.size -> activeQueue[i]
+                _uiState.value.repeatMode == RepeatMode.ALL && activeQueue.isNotEmpty() -> activeQueue[i % activeQueue.size]
+                else -> null
+            }
+        }.filter { !it.isPodcast && it.localUri.isNullOrBlank() && it.localFilePath.isNullOrBlank() }
+            .distinctBy { it.id }
+        if (upcoming.isEmpty()) return
 
         prefetchJob?.cancel()
         prefetchJob = scope.launch(Dispatchers.IO) {
-            if (nextTrack.sourceUrl.isNotBlank()) {
-                extractorRepo.prefetchStreamUrl(nextTrack.sourceUrl)
-            } else {
+            for (next in upcoming) {
                 runCatching {
-                    val found = extractorRepo.searchMusic(
-                        "${nextTrack.artist} ${nextTrack.cleanTitle}",
-                        originalsOnly = true
-                    ).firstOrNull()
-                    if (found != null) {
-                        extractorRepo.prefetchStreamUrl(found.sourceUrl)
-                    }
+                    val sourceUrl = sourceUrlFor(next) ?: return@runCatching
+                    val streamUrl = extractorRepo.resolveFastStreamingAudioUrl(sourceUrl)
+                    AudioPrecache.precache(context, streamUrl)
                 }
             }
         }
+    }
+
+    /** Fuente de YouTube de la canción; si no tiene, la busca una sola vez y la recuerda. */
+    private suspend fun sourceUrlFor(track: TrackItem): String? {
+        if (track.sourceUrl.isNotBlank()) return track.sourceUrl
+        resolvedSources[track.id]?.let { return it }
+        val found = extractorRepo.searchMusic("${track.artist} ${track.cleanTitle}", originalsOnly = true)
+            .firstOrNull()?.sourceUrl?.takeIf { it.isNotBlank() } ?: return null
+        resolvedSources[track.id] = found
+        return found
     }
 
     private suspend fun resolvePlayableUri(track: TrackItem): Uri {
@@ -590,14 +605,9 @@ class PlayerController(
             val file = java.io.File(path)
             if (file.exists() && file.length() > 0L) return Uri.fromFile(file)
         }
-        val streamUrl = if (track.sourceUrl.isNotBlank()) {
-            extractorRepo.resolveFastStreamingAudioUrl(track.sourceUrl)
-        } else {
-            val found = extractorRepo.searchMusic("${track.artist} ${track.cleanTitle}", originalsOnly = true)
-                .firstOrNull()
-                ?: throw IllegalStateException("No se encontró audio para ${track.cleanTitle}")
-            extractorRepo.resolveFastStreamingAudioUrl(found.sourceUrl)
-        }
+        val sourceUrl = sourceUrlFor(track)
+            ?: throw IllegalStateException("No se encontró audio para ${track.cleanTitle}")
+        val streamUrl = extractorRepo.resolveFastStreamingAudioUrl(sourceUrl)
         return Uri.parse(streamUrl)
     }
 
@@ -624,6 +634,9 @@ class PlayerController(
 
         /** Canciones con error seguidas que se saltan solas antes de detenerse. */
         const val MAX_CONSECUTIVE_ERRORS = 3
+
+        /** Canciones que se preparan por adelantado. */
+        const val PREFETCH_AHEAD = 2
 
         val AD_RESOURCES = intArrayOf(
             R.raw.marea_ad_1,

@@ -58,6 +58,9 @@ import coil.compose.AsyncImage
 import com.marea.music.domain.model.PlaylistResult
 import com.marea.music.domain.model.TrackItem
 import com.marea.music.ui.components.GlassSectionTitle
+import com.marea.music.ui.components.GlassIconButton
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.lazy.LazyRow
@@ -96,7 +99,8 @@ fun SearchScreen(
     onSelectAllPlaylist: (Boolean) -> Unit,
     onDownloadSelectedPlaylist: () -> Unit,
     onClearPlaylist: () -> Unit,
-    onOpenPlaylist: (PlaylistResult) -> Unit = {}
+    onOpenPlaylist: (PlaylistResult) -> Unit = {},
+    onPlayShuffled: (List<TrackItem>) -> Unit = {}
 ) {
     val clipboard = LocalClipboardManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -260,6 +264,26 @@ fun SearchScreen(
                         }
 
                         Spacer(modifier = Modifier.height(14.dp))
+
+                        if (playlist.tracks.isNotEmpty()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                GlowButton(
+                                    text = "Reproducir",
+                                    icon = Icons.Rounded.PlayArrow,
+                                    onClick = { onPlayTrack(playlist.tracks.first(), playlist.tracks) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                GlassIconButton(
+                                    icon = Icons.Rounded.Shuffle,
+                                    contentDescription = "Aleatorio",
+                                    onClick = { onPlayShuffled(playlist.tracks) },
+                                    size = 52.dp,
+                                    tint = MareaCyan
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
 
                         val pendingTracks = playlist.tracks.filter { !it.isDownloaded }
                         val pendingSelectedCount = pendingTracks.count { it.id in state.selectedPlaylistIds }

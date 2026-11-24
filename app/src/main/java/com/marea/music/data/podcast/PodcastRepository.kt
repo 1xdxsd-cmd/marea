@@ -50,6 +50,7 @@ class PodcastRepository(
     private val httpClient: OkHttpClient
 ) {
     private val followFile = File(context.applicationContext.filesDir, "podcasts_following.json")
+    private val episodesDir = File(context.applicationContext.filesDir, "podcast_cache")
     private val episodeCache = ConcurrentHashMap<String, List<PodcastEpisode>>()
 
     private val _following = MutableStateFlow<List<PodcastShow>>(emptyList())
@@ -131,8 +132,58 @@ class PodcastRepository(
                 parseFeed(stream, show)
             }
             episodeCache[show.feedUrl] = list
+            if (list.isNotEmpty()) writeDiskCache(show, list)
             list
         }
+
+    /** Episodios guardados de la última vez: se muestran al instante mientras se actualizan. */
+    suspend fun cachedEpisodes(show: PodcastShow): List<PodcastEpisode>? = withContext(Dispatchers.IO) {
+        episodeCache[show.feedUrl]?.let { return@withContext it }
+        runCatching {
+            val file = diskCacheFile(show)
+            if (!file.exists()) return@runCatching null
+            val arr = JSONArray(file.readText())
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                PodcastEpisode(
+                    id = o.getString("id"),
+                    showId = show.id,
+                    title = o.optString("title"),
+                    audioUrl = o.getString("audio"),
+                    publishedAt = o.optLong("date"),
+                    durationSeconds = o.optLong("dur"),
+                    description = o.optString("desc"),
+                    imageUrl = o.optString("img")
+                )
+            }
+        }.getOrNull()?.takeIf { it.isNotEmpty() }
+    }
+
+    /** Ya se actualizó hace poco en esta sesión (no hace falta volver a bajar el RSS). */
+    fun isFresh(show: PodcastShow): Boolean = episodeCache.containsKey(show.feedUrl)
+
+    private fun diskCacheFile(show: PodcastShow) =
+        File(episodesDir, Integer.toHexString(show.feedUrl.hashCode()) + "_" + show.id + ".json")
+
+    private fun writeDiskCache(show: PodcastShow, list: List<PodcastEpisode>) {
+        runCatching {
+            episodesDir.mkdirs()
+            val arr = JSONArray()
+            list.forEach { e ->
+                arr.put(
+                    JSONObject()
+                        .put("id", e.id)
+                        .put("title", e.title)
+                        .put("audio", e.audioUrl)
+                        .put("date", e.publishedAt)
+                        .put("dur", e.durationSeconds)
+                        .put("desc", e.description)
+                        .put("img", e.imageUrl)
+                )
+            }
+            diskCacheFile(show).writeText(arr.toString())
+        }
+    }
 
     private fun parseFeed(input: java.io.InputStream, show: PodcastShow): List<PodcastEpisode> {
         val parser = Xml.newPullParser()

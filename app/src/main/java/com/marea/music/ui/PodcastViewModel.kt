@@ -73,13 +73,24 @@ class PodcastViewModel(private val container: AppContainer) : ViewModel() {
             )
         }
         episodesJob = viewModelScope.launch {
-            val result = runCatching { repo.episodes(show, forceRefresh = refresh) }
+            // Primero lo guardado (aparece al instante); luego se actualiza con internet.
+            if (!refresh) {
+                repo.cachedEpisodes(show)?.let { cached ->
+                    _state.update { if (it.openedShow?.id == show.id) it.copy(episodes = cached) else it }
+                    if (repo.isFresh(show)) {
+                        _state.update { if (it.openedShow?.id == show.id) it.copy(isLoadingEpisodes = false) else it }
+                        return@launch
+                    }
+                }
+            }
+            val result = runCatching { repo.episodes(show, forceRefresh = true) }
             _state.update {
                 if (it.openedShow?.id != show.id) it
                 else it.copy(
                     isLoadingEpisodes = false,
-                    episodes = result.getOrDefault(it.episodes),
-                    error = result.exceptionOrNull()?.let { e -> e.message ?: "No se pudieron cargar los episodios" }
+                    episodes = result.getOrNull()?.takeIf { list -> list.isNotEmpty() } ?: it.episodes,
+                    error = if (it.episodes.isNotEmpty()) null
+                    else result.exceptionOrNull()?.let { e -> e.message ?: "No se pudieron cargar los episodios" }
                 )
             }
         }

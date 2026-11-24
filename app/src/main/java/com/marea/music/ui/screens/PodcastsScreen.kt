@@ -189,7 +189,8 @@ private fun ShowRow(show: PodcastShow, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         CoverArt(
-            url = show.artworkUrl,
+            // Versión chica de la portada para la lista (carga más rápido).
+            url = show.artworkUrl.replace("600x600bb", "200x200bb"),
             modifier = Modifier.size(58.dp),
             shape = RoundedCornerShape(15.dp),
             requestSize = 180,

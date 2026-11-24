@@ -6,6 +6,8 @@ import com.marea.music.data.access.AccessMonitor
 import com.marea.music.data.access.AccessRepository
 import com.marea.music.data.history.ListeningHistory
 import com.marea.music.data.download.DownloadOrchestrator
+import com.marea.music.data.download.DownloadStorageMigration
+import kotlinx.coroutines.launch
 import com.marea.music.data.extractor.YouTubeExtractorRepository
 import com.marea.music.data.local.MareaDatabase
 import com.marea.music.data.metadata.LyricsRepository
@@ -32,6 +34,13 @@ class AppContainer(context: Context) {
     val radioQueue = RadioQueue(extractorRepo, database.mareaDao())
     val playerController = PlayerController(appContext, extractorRepo, listeningHistory, radioQueue)
     val podcastRepository = PodcastRepository(appContext, httpClient)
+
+    init {
+        // Mueve las descargas viejas de Música/Marea a la carpeta privada de la app.
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
+            DownloadStorageMigration(appContext, database.mareaDao()).run()
+        }
+    }
     val accessRepository = AccessRepository(appContext, httpClient, BuildConfig.ACCESS_SERVER_URL)
     val accessMonitor = AccessMonitor(accessRepository, playerController).also { it.start() }
 }

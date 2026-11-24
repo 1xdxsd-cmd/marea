@@ -1,12 +1,7 @@
 package com.marea.music.data.tagger
 
-import android.content.ContentValues
 import android.content.Context
-import android.media.MediaScannerConnection
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
 import com.marea.music.domain.model.EnrichedMetadata
 import com.marea.music.domain.model.TrackItem
 import kotlinx.coroutines.Dispatchers
@@ -26,17 +21,18 @@ data class SavedAudioResult(
 class AudioTagger(private val context: Context) {
 
     /**
-     * Embeds ID3/MP4 metadata + square album art into [tempAudioFile] using JAudiotagger,
-     * then exports the final .m4a file to public Music/Marea/ storage.
+     * Pone título, artista y portada al .m4a y lo guarda en la carpeta privada de la app.
+     * Así las descargas solo se escuchan en Marea y no aparecen en otros reproductores.
      */
     suspend fun tagAndSaveM4a(
         tempAudioFile: File,
         coverFile: File?,
-        metadata: EnrichedMetadata
+        metadata: EnrichedMetadata,
+        trackId: String = ""
     ): SavedAudioResult = withContext(Dispatchers.IO) {
         applyTags(tempAudioFile, coverFile, metadata)
-        val safeName = sanitizeFilename("${metadata.artist} - ${metadata.title}") + ".m4a"
-        exportToMusicDirectory(tempAudioFile, safeName, metadata)
+        val baseName = trackId.ifBlank { sanitizeFilename("${metadata.artist} - ${metadata.title}") }
+        exportToPrivateStorage(tempAudioFile, sanitizeFilename(baseName) + ".m4a")
     }
 
     /**
@@ -155,71 +151,21 @@ class AudioTagger(private val context: Context) {
         val existingPath = track.localFilePath?.let(::File)
         if (existingPath != null && existingPath.parentFile?.exists() == true) {
             sourceFile.copyTo(existingPath, overwrite = true)
-            MediaScannerConnection.scanFile(
-                context,
-                arrayOf(existingPath.absolutePath),
-                arrayOf("audio/mp4"),
-                null
-            )
             return SavedAudioResult(
                 localUri = existingPath.toURI().toString(),
                 localFilePath = existingPath.absolutePath
             )
         }
 
-        val safeName = sanitizeFilename("${metadata.artist} - ${metadata.title}") + ".m4a"
-        return exportToMusicDirectory(sourceFile, safeName, metadata)
+        return exportToPrivateStorage(sourceFile, sanitizeFilename(track.id) + ".m4a")
     }
 
-    private fun exportToMusicDirectory(
-        sourceFile: File,
-        displayName: String,
-        metadata: EnrichedMetadata
-    ): SavedAudioResult {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val resolver = context.contentResolver
-            val values = ContentValues().apply {
-                put(MediaStore.Audio.Media.DISPLAY_NAME, displayName)
-                put(MediaStore.Audio.Media.MIME_TYPE, "audio/mp4")
-                put(MediaStore.Audio.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MUSIC}/Marea")
-                put(MediaStore.Audio.Media.TITLE, metadata.title)
-                put(MediaStore.Audio.Media.ARTIST, metadata.artist)
-                if (metadata.album.isNotBlank()) {
-                    put(MediaStore.Audio.Media.ALBUM, metadata.album)
-                }
-                put(MediaStore.Audio.Media.IS_MUSIC, 1)
-                put(MediaStore.Audio.Media.IS_PENDING, 1)
-            }
-
-            val uri = resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)
-            if (uri != null) {
-                resolver.openOutputStream(uri)?.use { out ->
-                    FileInputStream(sourceFile).use { input ->
-                        input.copyTo(out)
-                    }
-                }
-                val finishValues = ContentValues().apply {
-                    put(MediaStore.Audio.Media.IS_PENDING, 0)
-                }
-                resolver.update(uri, finishValues, null, null)
-                return SavedAudioResult(localUri = uri.toString(), localFilePath = null)
-            }
-        }
-
-        val musicRoot = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir
-        val mareaDir = File(musicRoot, "Marea").apply { mkdirs() }
-        val destFile = File(mareaDir, displayName)
-        sourceFile.copyTo(destFile, overwrite = true)
-
-        MediaScannerConnection.scanFile(
-            context,
-            arrayOf(destFile.absolutePath),
-            arrayOf("audio/mp4"),
-            null
-        )
+    private fun exportToPrivateStorage(sourceFile: File, fileName: String): SavedAudioResult {
+        val dest = File(privateMusicDir(context), fileName)
+        sourceFile.copyTo(dest, overwrite = true)
         return SavedAudioResult(
-            localUri = destFile.toURI().toString(),
-            localFilePath = destFile.absolutePath
+            localUri = Uri.fromFile(dest).toString(),
+            localFilePath = dest.absolutePath
         )
     }
 
@@ -231,3 +177,10 @@ class AudioTagger(private val context: Context) {
         return cleaned.ifBlank { "marea_track_${System.currentTimeMillis()}" }.take(90)
     }
 }
+
+/** Carpeta privada de las descargas (no la ven otras apps ni el escáner de música). */
+fun privateMusicDir(context: Context): File =
+    File(context.applicationContext.filesDir, "music").apply {
+        mkdirs()
+        runCatching { File(this, ".nomedia").createNewFile() }
+    }

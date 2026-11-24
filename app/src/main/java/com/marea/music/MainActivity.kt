@@ -244,7 +244,15 @@ class MainActivity : ComponentActivity() {
                                     onSelectAllPlaylist = viewModel::selectAllPlaylistTracks,
                                     onDownloadSelectedPlaylist = viewModel::downloadSelectedPlaylist,
                                     onClearPlaylist = viewModel::clearPlaylistPreview,
-                                    onOpenPlaylist = viewModel::openSearchPlaylist
+                                    onOpenPlaylist = viewModel::openSearchPlaylist,
+                                    onPlayShuffled = { tracks ->
+                                        if (tracks.isNotEmpty()) {
+                                            if (!playbackState.shuffleEnabled) {
+                                                viewModel.toggleShuffle()
+                                            }
+                                            viewModel.playTrack(tracks.random(), tracks)
+                                        }
+                                    }
                                 )
 
                                 2 -> LibraryScreen(

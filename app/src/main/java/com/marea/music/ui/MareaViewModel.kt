@@ -610,10 +610,11 @@ class MareaViewModel(
         val state = _searchState.value
         val preview = state.playlistPreview ?: return
         if (!canDownload()) return
-        val savedMap = allSavedTracksMap.value
-        val selected = preview.tracks.filter {
-            it.id in state.selectedPlaylistIds && savedMap[it.id]?.isDownloaded != true
-        }
+        val index = savedIndex.value
+        val selected = preview.tracks
+            .filter { it.id in state.selectedPlaylistIds }
+            .filter { index.sync(it).downloadStatus == DownloadStatus.NONE }
+            .distinctBy { normalizedKey(it) }
         if (selected.isEmpty()) {
             _searchState.update {
                 it.copy(infoMessage = "Las canciones seleccionadas ya están descargadas")
@@ -766,6 +767,14 @@ class MareaViewModel(
 
     fun deleteDownloadedTrack(trackId: String) {
         viewModelScope.launch(Dispatchers.IO) {
+            dao.getTrackById(trackId)?.let { saved ->
+                runCatching { saved.localFilePath?.let { java.io.File(it).delete() } }
+                runCatching {
+                    saved.localUri?.takeIf { it.startsWith("content://") }?.let {
+                        container.appContext.contentResolver.delete(android.net.Uri.parse(it), null, null)
+                    }
+                }
+            }
             dao.removeTrackFromAllPlaylists(trackId)
             dao.deleteTrack(trackId)
         }
@@ -802,7 +811,9 @@ class MareaViewModel(
             val result = container.lyricsRepository.fetchLyrics(
                 artist = track.artist,
                 title = track.cleanTitle.ifBlank { track.title },
-                durationSeconds = track.durationSeconds
+                durationSeconds = track.durationSeconds,
+                // La letra guardada al descargar se encuentra también por el id de la descarga.
+                trackIds = listOfNotNull(track.id, savedIndex.value.match(track)?.id)
             )
             _lyricsState.value = result
             _isLoadingLyrics.value = false
