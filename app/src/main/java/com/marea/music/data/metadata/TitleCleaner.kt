@@ -7,6 +7,8 @@ object TitleCleaner {
     private val noisePatterns = listOf(
         Regex("""\((?:official\s*(?:music\s*)?video|official\s*audio|lyric\s*video|lyrics?|audio|visualizer|hd|hq|4k|remastered.*?|explicit|clean|live.*?)\)""", RegexOption.IGNORE_CASE),
         Regex("""\[(?:official\s*(?:music\s*)?video|official\s*audio|lyric\s*video|lyrics?|audio|visualizer|hd|hq|4k|remastered.*?|explicit|clean|live.*?)\]""", RegexOption.IGNORE_CASE),
+        // Etiquetas en español o mezcladas: [Oficial Video], (Video Oficial), (Audio Oficial), (Letra)...
+        Regex("""\s*[\(\[][^\)\]]*(?:oficial|official|v[ií]deo|audio|lyric|letra|visuali[sz]er)[^\)\]]*[\)\]]""", RegexOption.IGNORE_CASE),
         Regex("""\s*\|\s*.*$"""),
         Regex("""\s+(?:ft\.?|feat\.?)\s+.*$""", RegexOption.IGNORE_CASE)
     )
@@ -86,6 +88,21 @@ object TitleCleaner {
             }
         }
         return cleanedUploader to cleanedTitle
+    }
+
+    /**
+     * Clave para reconocer la misma canción aunque venga de otro video:
+     * artista principal + título limpio ("Natanael Cano x Tito Double P" y "Natanael Cano",
+     * "Olivia La Flaka [Oficial Video]" y "Olivia La Flaka" dan la misma clave).
+     */
+    fun matchKey(artist: String, title: String): String {
+        val (a, t) = extractArtistAndTrack(title, artist)
+        val primary = cleanArtist(a)
+            .split(Regex("""\s*(?:,|&|\+|feat\.?|ft\.?)\s*|\s+(?:x|con|with)\s+""", RegexOption.IGNORE_CASE))
+            .firstOrNull { it.isNotBlank() }
+            ?.trim()
+            .orEmpty()
+        return normalizeForMatching(primary) + "|" + normalizeForMatching(cleanTitle(t))
     }
 
     fun normalizeForMatching(text: String): String {

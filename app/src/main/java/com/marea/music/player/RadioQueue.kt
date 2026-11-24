@@ -61,7 +61,7 @@ class RadioQueue(
     }
 
     private fun key(track: TrackItem): String =
-        TitleCleaner.normalizeForMatching("${track.artist} ${track.cleanTitle.ifBlank { track.title }}")
+        TitleCleaner.matchKey(track.artist, track.cleanTitle.ifBlank { track.title })
 
     private fun titleKey(track: TrackItem): String =
         TitleCleaner.normalizeForMatching(track.cleanTitle.ifBlank { track.title })

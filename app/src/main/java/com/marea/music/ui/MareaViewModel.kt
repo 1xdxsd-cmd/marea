@@ -552,6 +552,11 @@ class MareaViewModel(
 
     fun downloadSingleTrack(track: TrackItem) {
         val current = savedIndex.value.sync(track)
+        if (current.downloadStatus == DownloadStatus.COMPLETED && savedIndex.value.byId[track.id]?.isDownloaded != true) {
+            // Es la misma canción que ya descargaste desde otro video.
+            _uiMessage.value = "Ya tienes esta canción descargada"
+            return
+        }
         if (current.downloadStatus == DownloadStatus.COMPLETED ||
             current.downloadStatus == DownloadStatus.QUEUED ||
             current.downloadStatus == DownloadStatus.DOWNLOADING ||
@@ -836,7 +841,7 @@ class MareaViewModel(
 
     companion object {
         private fun normalizedKey(track: TrackItem): String =
-            TitleCleaner.normalizeForMatching("${track.artist} ${track.cleanTitle.ifBlank { track.title }}")
+            TitleCleaner.matchKey(track.artist, track.cleanTitle.ifBlank { track.title })
 
         const val PREMIUM_DOWNLOAD_MESSAGE =
             "Las descargas son de Premium. Activa tu plan en Cuenta para escuchar sin conexión."

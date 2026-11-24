@@ -176,10 +176,7 @@ class YouTubeExtractorRepository {
                 .map { mapStreamInfoItem(it) }
                 .filter { it.id.isNotBlank() }
                 .distinctBy { it.id }
-                .distinctBy {
-                    TitleCleaner.normalizeForMatching(it.artist) + "|" +
-                        TitleCleaner.normalizeForMatching(it.cleanTitle.ifBlank { it.title })
-                }
+                .distinctBy { TitleCleaner.matchKey(it.artist, it.cleanTitle.ifBlank { it.title }) }
                 .take(maxTracks)
             val thumb = pickBestThumbnail(
                 info.thumbnails.maxByOrNull { it.width * it.height }?.url
