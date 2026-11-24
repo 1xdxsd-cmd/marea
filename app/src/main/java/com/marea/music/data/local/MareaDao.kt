@@ -83,6 +83,9 @@ interface MareaDao {
         updatedAt: Long = System.currentTimeMillis()
     )
 
+    @Query("UPDATE tracks SET localUri = :localUri, localFilePath = :localFilePath WHERE id = :trackId")
+    suspend fun updateTrackLocation(trackId: String, localUri: String, localFilePath: String)
+
     @Query("DELETE FROM tracks WHERE id = :trackId")
     suspend fun deleteTrack(trackId: String)
 

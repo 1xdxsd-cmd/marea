@@ -162,10 +162,10 @@ fun ArtworkBackdrop(url: String, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     Box(modifier = modifier.fillMaxSize().background(MareaBg)) {
         if (url.isNotBlank()) {
-            // En Android 12+ se difumina de verdad; en versiones anteriores la imagen pequeña
-            // ampliada ya se ve suave.
+            // Una imagen diminuta ampliada ya se ve difuminada. Antes se aplicaba un blur de
+            // 70 dp en cada cuadro, lo que trababa la animación al abrir y cerrar el reproductor.
             val request = remember(url) {
-                ImageRequest.Builder(context).data(url).size(if (Build.VERSION.SDK_INT >= 31) 200 else 24).build()
+                ImageRequest.Builder(context).data(url).size(20).build()
             }
             AsyncImage(
                 model = request,
@@ -173,9 +173,7 @@ fun ArtworkBackdrop(url: String, modifier: Modifier = Modifier) {
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer { scaleX = 1.3f; scaleY = 1.3f }
-                    .blur(70.dp)
-                    .alpha(0.75f)
+                    .graphicsLayer { scaleX = 1.3f; scaleY = 1.3f; alpha = 0.75f }
             )
         }
         Box(

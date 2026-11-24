@@ -8,13 +8,21 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MAREA_ACCESS_URL: ${{ secrets.MAREA_ACCESS_URL }}
+      MAREA_KEYSTORE_BASE64: ${{ secrets.MAREA_KEYSTORE_BASE64 }}
+      MAREA_KEYSTORE_PASSWORD: ${{ secrets.MAREA_KEYSTORE_PASSWORD }}
+      # Cada compilación tiene un número mayor que la anterior, así se instala como actualización.
+      MAREA_VERSION_CODE: ${{ github.run_number }}
+      MAREA_VERSION_NAME: 1.0.${{ github.run_number }}
 
     steps:
-      - name: Verificar secreto
+      - name: Verificar secretos
         run: |
           if [ -z "$MAREA_ACCESS_URL" ]; then
             echo "Falta el secreto MAREA_ACCESS_URL (Settings > Secrets and variables > Actions)"
             exit 1
+          fi
+          if [ -z "$MAREA_KEYSTORE_BASE64" ] || [ -z "$MAREA_KEYSTORE_PASSWORD" ]; then
+            echo "::warning::Faltan MAREA_KEYSTORE_BASE64 / MAREA_KEYSTORE_PASSWORD: se firma con una llave temporal, que NO se puede instalar encima de otra versión."
           fi
 
       - uses: actions/checkout@v4
@@ -29,13 +37,35 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Compilar APK debug
+      # APK release (no debug): sin modo depuración la app corre mucho más fluida.
+      - name: Compilar APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          SUFFIX=""
+          if [ -n "$MAREA_KEYSTORE_BASE64" ]; then
+            echo "$MAREA_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/marea-release.jks"
+            export MAREA_KEYSTORE_PATH="$RUNNER_TEMP/marea-release.jks"
+            export MAREA_KEYSTORE_PASS="$MAREA_KEYSTORE_PASSWORD"
+            export MAREA_KEY_PASS="$MAREA_KEYSTORE_PASSWORD"
+            export MAREA_KEY_ALIAS=marea
+          else
+            SUFFIX="-llave-temporal"
+          fi
+          ./gradlew assembleRelease \
+            -PMAREA_VERSION_CODE="$MAREA_VERSION_CODE" \
+            -PMAREA_VERSION_NAME="$MAREA_VERSION_NAME"
+          rm -f "$RUNNER_TEMP/marea-release.jks"
+          mkdir -p out
+          cp app/build/outputs/apk/release/app-release.apk "out/marea-$MAREA_VERSION_NAME$SUFFIX.apk"
+
+      - name: Mostrar la firma del APK
+        run: |
+          echo "Huella SHA-256 del certificado (debe ser siempre la misma con la llave fija):"
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs out/*.apk | grep -E "DN|SHA-256" || true
 
       - uses: actions/upload-artifact@v4
         with:
-          name: marea-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 7
+          name: marea-apk
+          path: out/*.apk
+          retention-days: 14

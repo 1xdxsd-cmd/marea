@@ -15,6 +15,7 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.marea.music.MainActivity
@@ -52,7 +53,13 @@ class MareaPlaybackService : MediaSessionService() {
             .build()
 
         val player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(
+                    dataSourceFactory,
+                    // Permite adelantar/retroceder en MP3 de podcasts sin índice de búsqueda.
+                    DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
+                )
+            )
             .setLoadControl(loadControl)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .setAudioAttributes(
@@ -67,9 +74,11 @@ class MareaPlaybackService : MediaSessionService() {
 
         // Ecualizador (Premium) sobre la sesión de audio del reproductor.
         EqualizerManager.attach(this, player.audioSessionId)
+        VolumeBoostManager.attach(this, player.audioSessionId)
         player.addAnalyticsListener(object : AnalyticsListener {
             override fun onAudioSessionIdChanged(eventTime: AnalyticsListener.EventTime, audioSessionId: Int) {
                 EqualizerManager.attach(this@MareaPlaybackService, audioSessionId)
+                VolumeBoostManager.attach(this@MareaPlaybackService, audioSessionId)
             }
         })
 
@@ -119,6 +128,7 @@ class MareaPlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         EqualizerManager.release()
+        VolumeBoostManager.release()
         mediaSession?.run {
             player.release()
             release()

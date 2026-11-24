@@ -30,6 +30,10 @@ data class TrackItem(
 
     val isDownloaded: Boolean
         get() = downloadStatus == DownloadStatus.COMPLETED && (!localUri.isNullOrBlank() || !localFilePath.isNullOrBlank())
+
+    /** Episodio de podcast: el audio sale directo del RSS (no de YouTube). */
+    val isPodcast: Boolean
+        get() = id.startsWith("podcast:")
 }
 
 data class PlaylistPreview(
@@ -39,6 +43,15 @@ data class PlaylistPreview(
     val thumbnailUrl: String,
     val sourceUrl: String,
     val tracks: List<TrackItem>
+)
+
+/** Una playlist de YouTube que aparece al buscar. */
+data class PlaylistResult(
+    val title: String,
+    val author: String,
+    val url: String,
+    val thumbnailUrl: String,
+    val trackCount: Long
 )
 
 data class LocalPlaylist(

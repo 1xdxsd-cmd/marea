@@ -12,6 +12,7 @@ import androidx.media3.session.SessionToken
 import com.marea.music.R
 import com.marea.music.data.extractor.YouTubeExtractorRepository
 import com.marea.music.data.history.ListeningHistory
+import com.marea.music.data.podcast.PodcastProgressStore
 import com.marea.music.domain.model.TrackItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class RepeatMode {
     OFF,
@@ -50,12 +52,18 @@ data class PlaybackUiState(
 class PlayerController(
     private val context: Context,
     private val extractorRepo: YouTubeExtractorRepository,
-    private val history: ListeningHistory? = null
+    private val history: ListeningHistory? = null,
+    private val radioQueue: RadioQueue? = null
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val _uiState = MutableStateFlow(PlaybackUiState())
     val uiState: StateFlow<PlaybackUiState> = _uiState.asStateFlow()
+
+    // La posición cambia 4 veces por segundo: va en su propio flujo para que solo la barra
+    // de progreso y la letra se redibujen, no toda la app.
+    private val _position = MutableStateFlow(0L)
+    val position: StateFlow<Long> = _position.asStateFlow()
 
     private var mediaController: MediaController? = null
     private var originalQueue: List<TrackItem> = emptyList()
@@ -63,6 +71,11 @@ class PlayerController(
     private var currentIndex: Int = -1
     private var playJob: Job? = null
     private var prefetchJob: Job? = null
+    private var radioJob: Job? = null
+    private var errorSkipJob: Job? = null
+    private var consecutiveErrors = 0
+    private var podcastTicks = 0
+    private val resolvedSources = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     // ---- Plan gratis: anuncios y límite de saltos ----
     private val freePrefs = context.getSharedPreferences(FREE_PREFS, Context.MODE_PRIVATE)
@@ -74,6 +87,8 @@ class PlayerController(
 
     init {
         EqualizerManager.init(context)
+        VolumeBoostManager.init(context)
+        PodcastProgressStore.init(context)
         connectController()
         startProgressTicker()
     }
@@ -90,6 +105,7 @@ class PlayerController(
                 controller.addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
                         _uiState.update { it.copy(isPlaying = isPlaying) }
+                        if (!isPlaying) savePodcastProgress()
                     }
 
                     override fun onPlaybackStateChanged(playbackState: Int) {
@@ -116,6 +132,7 @@ class PlayerController(
                                 errorMessage = error.localizedMessage ?: "Error al reproducir el audio"
                             )
                         }
+                        skipAfterError()
                     }
                 })
             }
@@ -129,9 +146,10 @@ class PlayerController(
                 if (controller != null && controller.isPlaying) {
                     val pos = controller.currentPosition.coerceAtLeast(0L)
                     val dur = controller.duration.coerceAtLeast(_uiState.value.durationMs)
-                    _uiState.update {
-                        if (it.positionMs == pos && it.durationMs == dur) it
-                        else it.copy(positionMs = pos, durationMs = dur)
+                    _position.value = pos
+                    if (++podcastTicks % 20 == 0) savePodcastProgress()
+                    if (_uiState.value.durationMs != dur) {
+                        _uiState.update { it.copy(durationMs = dur) }
                     }
                 }
                 delay(250L)
@@ -197,6 +215,7 @@ class PlayerController(
     }
 
     private fun handleTrackEnded() {
+        _uiState.value.currentTrack?.takeIf { it.isPodcast }?.let { PodcastProgressStore.markFinished(it.id) }
         if (activeQueue.isEmpty()) return
         when (_uiState.value.repeatMode) {
             RepeatMode.ONE -> {
@@ -212,7 +231,8 @@ class PlayerController(
                     currentIndex += 1
                     playAtIndex(currentIndex)
                 } else {
-                    _uiState.update { it.copy(isPlaying = false, positionMs = 0L) }
+                    // Fin de la cola: sigue con canciones parecidas (radio).
+                    continueWithRadio(fromIndex = currentIndex)
                 }
             }
         }
@@ -222,7 +242,12 @@ class PlayerController(
         if (activeQueue.isEmpty()) return
         if (blockedByAd()) return
         val hasNext = currentIndex + 1 < activeQueue.size || _uiState.value.repeatMode == RepeatMode.ALL
-        if (!hasNext) return
+        if (!hasNext) {
+            if (radioQueue == null) return
+            if (!consumeFreeSkip()) return
+            continueWithRadio(fromIndex = currentIndex)
+            return
+        }
         if (!consumeFreeSkip()) return
         if (currentIndex + 1 < activeQueue.size) {
             currentIndex += 1
@@ -268,7 +293,7 @@ class PlayerController(
     fun seekTo(positionMs: Long) {
         if (_uiState.value.isAd) return
         mediaController?.seekTo(positionMs)
-        _uiState.update { it.copy(positionMs = positionMs) }
+        _position.value = positionMs
     }
 
     fun refreshTrackMetadata(updatedTrack: TrackItem, replayAudio: Boolean = false) {
@@ -340,6 +365,7 @@ class PlayerController(
         val resId = AD_RESOURCES[nextAd]
         nextAd = (nextAd + 1) % AD_RESOURCES.size
 
+        _position.value = 0L
         _uiState.update {
             it.copy(
                 currentTrack = AD_TRACK,
@@ -376,6 +402,7 @@ class PlayerController(
 
     private fun playAtIndex(index: Int, countForAds: Boolean = true) {
         val track = activeQueue.getOrNull(index) ?: return
+        savePodcastProgress()
         if (countForAds && !premium) {
             if (songsSinceAd >= SONGS_BETWEEN_ADS && mediaController != null) {
                 playAd(index)
@@ -387,6 +414,10 @@ class PlayerController(
         prefetchJob?.cancel()
 
         playJob = scope.launch {
+            // Calla la canción anterior al instante (antes seguía sonando unos segundos y la
+            // barra regresaba mientras cargaba la nueva).
+            mediaController?.pause()
+            _position.value = 0L
             _uiState.update {
                 it.copy(
                     currentTrack = track,
@@ -399,7 +430,7 @@ class PlayerController(
                 )
             }
             try {
-                val playableUri = resolvePlayableUri(track)
+                val playableUri = withContext(Dispatchers.IO) { resolvePlayableUri(track) }
                 val metadata = MediaMetadata.Builder()
                     .setTitle(track.cleanTitle.ifBlank { track.title })
                     .setArtist(track.artist)
@@ -414,12 +445,19 @@ class PlayerController(
                     .build()
 
                 val controller = mediaController ?: return@launch
-                controller.setMediaItem(mediaItem)
+                // Los episodios de podcast siguen desde donde te quedaste.
+                val startMs = if (track.isPodcast) PodcastProgressStore.resumePositionMs(track.id) else 0L
+                if (startMs > 0L) _position.value = startMs
+                controller.setMediaItem(mediaItem, startMs)
                 controller.prepare()
                 controller.play()
-                history?.record(track)
+                if (!track.isPodcast) history?.record(track)
+                consecutiveErrors = 0
 
                 prefetchNextTrack()
+                extendWithRadioIfNeeded()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -427,39 +465,138 @@ class PlayerController(
                         errorMessage = e.message ?: "No se pudo reproducir la canción"
                     )
                 }
+                skipAfterError()
             }
         }
     }
 
-    private fun prefetchNextTrack() {
-        val nextIndex = when {
-            activeQueue.isEmpty() -> return
-            currentIndex + 1 < activeQueue.size -> currentIndex + 1
-            _uiState.value.repeatMode == RepeatMode.ALL -> 0
-            else -> return
+    private fun savePodcastProgress() {
+        val track = _uiState.value.currentTrack?.takeIf { it.isPodcast } ?: return
+        val controller = mediaController ?: return
+        if (controller.currentMediaItem?.mediaId != track.id) return
+        val pos = controller.currentPosition.coerceAtLeast(0L)
+        if (pos < 5_000L) return
+        PodcastProgressStore.save(track.id, pos, controller.duration.coerceAtLeast(_uiState.value.durationMs))
+    }
+
+    // ---------- Radio: seguir con canciones parecidas ----------
+
+    /** Cuando quedan pocas canciones en la cola, agrega parecidas en segundo plano. */
+    private fun extendWithRadioIfNeeded() {
+        val radio = radioQueue ?: return
+        if (_uiState.value.repeatMode != RepeatMode.OFF) return
+        if (currentIndex < activeQueue.size - 2) return
+        if (radioJob?.isActive == true) return
+        val seed = activeQueue.getOrNull(currentIndex) ?: return
+        if (seed.isPodcast) return
+        radioJob = scope.launch {
+            val added = runCatching { radio.similarTo(seed, activeQueue) }.getOrDefault(emptyList())
+            if (added.isNotEmpty()) appendToQueue(added)
         }
-        val nextTrack = activeQueue.getOrNull(nextIndex) ?: return
-        if (!nextTrack.localUri.isNullOrBlank() || !nextTrack.localFilePath.isNullOrBlank()) return
+    }
+
+    private fun appendToQueue(tracks: List<TrackItem>) {
+        val ids = activeQueue.map { it.id }.toHashSet()
+        val fresh = tracks.filter { ids.add(it.id) }
+        if (fresh.isEmpty()) return
+        activeQueue = activeQueue + fresh
+        originalQueue = originalQueue + fresh
+        _uiState.update { it.copy(queue = activeQueue) }
+        prefetchNextTrack()
+    }
+
+    /** Se acabó la cola: espera (o pide) las parecidas y sigue sonando. */
+    private fun continueWithRadio(fromIndex: Int) {
+        // Los podcasts no siguen con canciones parecidas.
+        val radio = radioQueue?.takeIf { activeQueue.getOrNull(fromIndex)?.isPodcast != true }
+        if (radio == null) {
+            _position.value = 0L
+            _uiState.update { it.copy(isPlaying = false, positionMs = 0L) }
+            return
+        }
+        val seed = activeQueue.getOrNull(fromIndex)
+        scope.launch {
+            _uiState.update { it.copy(isBuffering = true) }
+            radioJob?.join()
+            if (fromIndex + 1 >= activeQueue.size && seed != null) {
+                val added = runCatching { radio.similarTo(seed, activeQueue) }.getOrDefault(emptyList())
+                appendToQueue(added)
+            }
+            if (currentIndex != fromIndex) return@launch
+            if (fromIndex + 1 < activeQueue.size) {
+                currentIndex = fromIndex + 1
+                playAtIndex(currentIndex)
+            } else {
+                _position.value = 0L
+                _uiState.update { it.copy(isPlaying = false, isBuffering = false, positionMs = 0L) }
+            }
+        }
+    }
+
+    /** Si una canción no se puede reproducir, pasa a la siguiente (máximo 3 seguidas). */
+    private fun skipAfterError() {
+        consecutiveErrors += 1
+        if (consecutiveErrors > MAX_CONSECUTIVE_ERRORS) return
+        val failedIndex = currentIndex
+        errorSkipJob?.cancel()
+        errorSkipJob = scope.launch {
+            delay(1_500L)
+            if (currentIndex != failedIndex || _uiState.value.isAd) return@launch
+            when {
+                failedIndex + 1 < activeQueue.size -> {
+                    currentIndex = failedIndex + 1
+                    playAtIndex(currentIndex)
+                }
+                _uiState.value.repeatMode == RepeatMode.ALL && activeQueue.size > 1 -> {
+                    currentIndex = 0
+                    playAtIndex(currentIndex)
+                }
+                else -> continueWithRadio(fromIndex = failedIndex)
+            }
+        }
+    }
+
+    /**
+     * Prepara las 2 siguientes canciones: busca su audio y baja el inicio a la caché,
+     * así "siguiente" (en la app o en los audífonos) arranca casi al instante.
+     */
+    private fun prefetchNextTrack() {
+        if (activeQueue.isEmpty()) return
+        val upcoming = (1..PREFETCH_AHEAD).mapNotNull { step ->
+            val i = currentIndex + step
+            when {
+                i < activeQueue.size -> activeQueue[i]
+                _uiState.value.repeatMode == RepeatMode.ALL && activeQueue.isNotEmpty() -> activeQueue[i % activeQueue.size]
+                else -> null
+            }
+        }.filter { !it.isPodcast && it.localUri.isNullOrBlank() && it.localFilePath.isNullOrBlank() }
+            .distinctBy { it.id }
+        if (upcoming.isEmpty()) return
 
         prefetchJob?.cancel()
         prefetchJob = scope.launch(Dispatchers.IO) {
-            if (nextTrack.sourceUrl.isNotBlank()) {
-                extractorRepo.prefetchStreamUrl(nextTrack.sourceUrl)
-            } else {
+            for (next in upcoming) {
                 runCatching {
-                    val found = extractorRepo.searchMusic(
-                        "${nextTrack.artist} ${nextTrack.cleanTitle}",
-                        originalsOnly = true
-                    ).firstOrNull()
-                    if (found != null) {
-                        extractorRepo.prefetchStreamUrl(found.sourceUrl)
-                    }
+                    val sourceUrl = sourceUrlFor(next) ?: return@runCatching
+                    val streamUrl = extractorRepo.resolveFastStreamingAudioUrl(sourceUrl)
+                    AudioPrecache.precache(context, streamUrl)
                 }
             }
         }
     }
 
+    /** Fuente de YouTube de la canción; si no tiene, la busca una sola vez y la recuerda. */
+    private suspend fun sourceUrlFor(track: TrackItem): String? {
+        if (track.sourceUrl.isNotBlank()) return track.sourceUrl
+        resolvedSources[track.id]?.let { return it }
+        val found = extractorRepo.searchMusic("${track.artist} ${track.cleanTitle}", originalsOnly = true)
+            .firstOrNull()?.sourceUrl?.takeIf { it.isNotBlank() } ?: return null
+        resolvedSources[track.id] = found
+        return found
+    }
+
     private suspend fun resolvePlayableUri(track: TrackItem): Uri {
+        if (track.isPodcast) return Uri.parse(track.sourceUrl)
         track.localUri?.takeIf { it.isNotBlank() }?.let { uriStr ->
             val parsed = Uri.parse(uriStr)
             if (isLocalUriReadable(parsed)) return parsed
@@ -468,14 +605,9 @@ class PlayerController(
             val file = java.io.File(path)
             if (file.exists() && file.length() > 0L) return Uri.fromFile(file)
         }
-        val streamUrl = if (track.sourceUrl.isNotBlank()) {
-            extractorRepo.resolveFastStreamingAudioUrl(track.sourceUrl)
-        } else {
-            val found = extractorRepo.searchMusic("${track.artist} ${track.cleanTitle}", originalsOnly = true)
-                .firstOrNull()
-                ?: throw IllegalStateException("No se encontró audio para ${track.cleanTitle}")
-            extractorRepo.resolveFastStreamingAudioUrl(found.sourceUrl)
-        }
+        val sourceUrl = sourceUrlFor(track)
+            ?: throw IllegalStateException("No se encontró audio para ${track.cleanTitle}")
+        val streamUrl = extractorRepo.resolveFastStreamingAudioUrl(sourceUrl)
         return Uri.parse(streamUrl)
     }
 
@@ -499,6 +631,12 @@ class PlayerController(
 
         /** Plan gratis: un anuncio cada tantas canciones. */
         const val SONGS_BETWEEN_ADS = 3
+
+        /** Canciones con error seguidas que se saltan solas antes de detenerse. */
+        const val MAX_CONSECUTIVE_ERRORS = 3
+
+        /** Canciones que se preparan por adelantado. */
+        const val PREFETCH_AHEAD = 2
 
         val AD_RESOURCES = intArrayOf(
             R.raw.marea_ad_1,

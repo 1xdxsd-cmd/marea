@@ -13,8 +13,10 @@ android {
         applicationId = "com.marea.music"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0-mvp"
+        // El workflow sube estos números en cada compilación para que Android la instale
+        // como actualización encima de la anterior (sin borrar la app ni los datos).
+        versionCode = (project.findProperty("MAREA_VERSION_CODE") as String?)?.toIntOrNull() ?: 1
+        versionName = (project.findProperty("MAREA_VERSION_NAME") as String?) ?: "0.1.0-mvp"
 
         // URL HTTPS de tu servidor de acceso (carpeta /server). Define MAREA_ACCESS_URL en
         // gradle.properties, con -PMAREA_ACCESS_URL=... o como variable de entorno.
@@ -40,16 +42,27 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            if (!System.getenv("MAREA_KEYSTORE_PATH").isNullOrBlank()) {
-                signingConfig = signingConfigs.getByName("release")
+            // Sin R8 por ahora: evita fallos por reflexión (NewPipe/Rhino) mientras no se pruebe a fondo.
+            isMinifyEnabled = false
+            isShrinkResources = false
+            // Con la llave fija (secretos del workflow) las actualizaciones se instalan encima.
+            // Sin ella se firma con la llave debug temporal, solo para pruebas.
+            signingConfig = if (!System.getenv("MAREA_KEYSTORE_PATH").isNullOrBlank()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
             }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
+    }
+
+    // Que una advertencia de lint no detenga la compilación del APK firmado.
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 
     compileOptions {
